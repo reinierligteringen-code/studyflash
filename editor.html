@@ -562,6 +562,7 @@
 
     const pendingSegments = [];
     let frameScheduled = false;
+    let lastFlushTime = 0;
     let activeStroke = null;
 
     // History using snapshots (fast)
@@ -569,13 +570,22 @@
 
     function queueSegment(segment) {
       pendingSegments.push(segment);
+    }
+
+    function requestFlush(forceImmediate = false) {
+      if (!pendingSegments.length) return;
+      const now = performance.now();
+      if (forceImmediate || now - lastFlushTime >= 6) {
+        drainSegments();
+        return;
+      }
       if (!frameScheduled) {
         frameScheduled = true;
-        requestAnimationFrame(flushSegments);
+        requestAnimationFrame(drainSegments);
       }
     }
 
-    function flushSegments() {
+    function drainSegments() {
       frameScheduled = false;
       if (!pendingSegments.length) return;
       const segments = pendingSegments.splice(0);
@@ -608,6 +618,7 @@
         }
       }
       ctx.restore();
+      lastFlushTime = performance.now();
     }
 
     function clearPreview() {
@@ -833,12 +844,17 @@
         const avgWidth = (prev.width + last.width) / 2;
         queueSegment({ type: 'line', mode: stroke.mode, from: stroke.prevMidpoint, to: last, width: avgWidth });
       }
+      requestFlush(true);
     }
 
-    function processSamples(events, stroke) {
+    function processSamples(events, stroke, forceFlush = false) {
+      const queuedBefore = pendingSegments.length;
       for (const evt of events) {
         const sample = createSample(evt, stroke);
         addPointToStroke(stroke, sample);
+      }
+      if (pendingSegments.length !== queuedBefore) {
+        requestFlush(forceFlush);
       }
     }
 
@@ -880,7 +896,7 @@
       canvasBounds = drawCanvas.getBoundingClientRect();
       clearPreview();
       drawCanvas.setPointerCapture?.(e.pointerId);
-      processSamples([e], stroke);
+      processSamples([e], stroke, true);
     }
 
     function moveDraw(e) {
