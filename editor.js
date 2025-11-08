@@ -31,7 +31,50 @@
   }
 
   setId = await ensureSetId();
-  const STORAGE_KEY = `study_deck_v2__${setId}`;
+
+  function resolveStorageKeys(id) {
+    const keys = [];
+    if (window.SetsAPI && typeof SetsAPI.storageKeyFor === 'function') {
+      try {
+        const key = SetsAPI.storageKeyFor(id);
+        if (key) keys.push(key);
+      } catch (err) {
+        console.warn('Unable to resolve storage key from SetsAPI', err);
+      }
+    }
+    keys.push(`study_deck_v2__${id}`);
+    keys.push(`study_deck_sync_v1__${id}`);
+    return Array.from(new Set(keys.filter(Boolean)));
+  }
+
+  const STORAGE_KEYS = resolveStorageKeys(setId);
+
+  function writeLocalDeck(deck) {
+    const payload = JSON.stringify(deck);
+    for (const key of STORAGE_KEYS) {
+      try {
+        localStorage.setItem(key, payload);
+      } catch (err) {
+        console.warn('Unable to persist deck locally', err);
+      }
+    }
+  }
+
+  function readLocalDeck() {
+    for (const key of STORAGE_KEYS) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          return parsed;
+        }
+      } catch (err) {
+        console.warn('Unable to parse deck from storage', key, err);
+      }
+    }
+    return null;
+  }
 
   const setNameEl = document.getElementById('setName');
   if (setNameEl) {
@@ -95,31 +138,24 @@
         const deck = await SetsAPI.loadDeck(setId);
         if (Array.isArray(deck) && deck.length) {
           state.deck = deck;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(deck));
+          writeLocalDeck(deck);
           return;
         }
         state.deck = [createCard()];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.deck));
+        writeLocalDeck(state.deck);
         await SetsAPI.saveDeck(setId, state.deck);
         return;
       } catch (err) {
         console.error('Unable to load deck from server', err);
       }
     }
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length) {
-          state.deck = parsed;
-          return;
-        }
-      } catch (err) {
-        console.warn('Could not parse deck, starting fresh', err);
-      }
+    const localDeck = readLocalDeck();
+    if (localDeck) {
+      state.deck = localDeck;
+      return;
     }
     state.deck = [createCard()];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.deck));
+    writeLocalDeck(state.deck);
   }
 
   function snapshotDeck() {
@@ -140,7 +176,7 @@
 
   function saveDeck({ immediate = false } = {}) {
     const snapshot = snapshotDeck();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    writeLocalDeck(snapshot);
     pendingSnapshot = snapshot;
     if (!window.SetsAPI) return;
     if (immediate) {
