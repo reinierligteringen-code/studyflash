@@ -23,6 +23,110 @@
       if (typeof override === 'string' && override.trim()) {
         return override.replace(/\/$/, '');
       }
+      try {
+        const deck = JSON.parse(raw) || [];
+        if (!Array.isArray(deck) || !deck.length) {
+          return [defaultCard()];
+        }
+        return deck;
+      } catch (err) {
+        return [defaultCard()];
+      }
+    },
+    saveDeck(id, deck) {
+      localStorage.setItem(this.storageKeyFor(id), JSON.stringify(deck));
+    }
+  };
+
+  let setsCache = Local.loadSets();
+  let pendingCache = loadPending();
+  let flushActive = false;
+
+  function loadPending() {
+    const raw = localStorage.getItem(LOCAL_PENDING_KEY);
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (err) {
+      console.warn('Unable to parse pending sync cache', err);
+      return {};
+    }
+  }
+
+  function savePending() {
+    try {
+      localStorage.setItem(LOCAL_PENDING_KEY, JSON.stringify(pendingCache));
+    } catch (err) {
+      console.warn('Unable to persist pending sync cache', err);
+    }
+  }
+
+  function ensurePendingEntry(id) {
+    if (!pendingCache[id]) {
+      pendingCache[id] = { id, updatedAt: nowTs() };
+    }
+    return pendingCache[id];
+  }
+
+  function clearPendingField(id, field) {
+    const entry = pendingCache[id];
+    if (!entry) return;
+    delete entry[field];
+    if (!entry.name && !entry.deck) {
+      delete pendingCache[id];
+    } else {
+      entry.updatedAt = nowTs();
+    }
+    savePending();
+  }
+
+  async function flushPending() {
+    if (flushActive) return;
+    if (!Object.keys(pendingCache).length) return;
+    if (typeof fetch !== 'function') return;
+    flushActive = true;
+    try {
+      const entries = Object.values(pendingCache).sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+      for (const entry of entries) {
+        const { id, name, deck } = entry;
+        const encodedId = encodeURIComponent(id);
+        try {
+          if (deck) {
+            await request(`/sets/${encodedId}/deck`, { method: 'PUT', body: { deck, name } });
+            clearPendingField(id, 'deck');
+          }
+          if (name) {
+            await request(`/sets/${encodedId}`, { method: 'PUT', body: { name } });
+            clearPendingField(id, 'name');
+          }
+        } catch (err) {
+          console.warn('Pending sync failed', id, err);
+          if (err && err.status === 404 && deck) {
+            try {
+              await request('/sets', { method: 'POST', body: { id, name: name || 'New Set', deck } });
+              clearPendingField(id, 'deck');
+              clearPendingField(id, 'name');
+            } catch (createErr) {
+              console.warn('Pending create failed', id, createErr);
+            }
+          }
+        }
+      }
+    } finally {
+      flushActive = false;
+      savePending();
+    }
+  }
+
+  function queuePendingDeck(id, deck, name) {
+    const entry = ensurePendingEntry(id);
+    entry.deck = deck;
+    if (name) entry.name = name;
+    entry.updatedAt = nowTs();
+    savePending();
+    if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+      flushPending();
     }
     return API_BASE;
   }

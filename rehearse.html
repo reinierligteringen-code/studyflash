@@ -257,6 +257,8 @@
             viewCtx.drawImage(im.__image, -drawW / 2, -drawH / 2, drawW, drawH);
             viewCtx.restore();
           }
+          v.stroke();
+          v.restore();
         }
 
         if (Array.isArray(content.strokes)) {
