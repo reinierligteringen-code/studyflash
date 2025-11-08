@@ -380,11 +380,19 @@ details.help {
   color: #ffffff;
 }
 
+.card-side-tag.is-front {
+  background: var(--accent);
+}
+
 .card-side-tag.is-back {
   background: var(--accent-alt);
 }
 
 .card-cell.back .card-side-tag {
+  background: var(--accent-alt);
+}
+
+.card-cell[data-side="back"] .card-side-tag {
   background: var(--accent-alt);
 }
 

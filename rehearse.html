@@ -137,13 +137,18 @@
           progressEl.textContent = `${deck.length ? index + 1 : 0} / ${deck.length || 0}`;
         }
         if (cardSideTag) {
-          cardSideTag.textContent = side === 'back' ? 'Back' : 'Front';
-          cardSideTag.classList.toggle('is-back', side === 'back');
+          const isBack = side === 'back';
+          cardSideTag.textContent = isBack ? 'Back' : 'Front';
+          cardSideTag.classList.toggle('is-back', isBack);
+          cardSideTag.classList.toggle('is-front', !isBack);
+          cardSideTag.setAttribute('data-side', isBack ? 'back' : 'front');
         }
         if (cardCell) {
-          cardCell.classList.toggle('back', side === 'back');
-          cardCell.classList.toggle('front', side !== 'back');
-          cardCell.setAttribute('aria-pressed', side === 'back' ? 'true' : 'false');
+          const isBack = side === 'back';
+          cardCell.classList.toggle('back', isBack);
+          cardCell.classList.toggle('front', !isBack);
+          cardCell.setAttribute('data-side', isBack ? 'back' : 'front');
+          cardCell.setAttribute('aria-pressed', isBack ? 'true' : 'false');
         }
       }
 
