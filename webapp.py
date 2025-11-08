@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
-import os, io, csv, sqlite3, base64, tempfile, datetime as dt
+import os, io, csv, sqlite3, datetime as dt
 from typing import Optional
 from fastapi import FastAPI, Request, Form, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from urllib.parse import urlencode
-
-# Optional imports for OCR
-try:
-    from PIL import Image, ImageOps, ImageFilter
-except Exception:
-    Image = None
 
 DB_PATH = os.environ.get("STUDY_DB", "study.db")
 
@@ -290,66 +284,3 @@ def rate(card_id: int, quality: int = Form(...), confidence: Optional[int] = For
     if tag: query["tag"] = tag
     qs = "?" + urlencode(query) if query else ""
     return RedirectResponse("/review" + qs, status_code=303)
-
-# ---------- OCR: Offline handwriting/typeset math -> LaTeX ----------
-def _predict_latex_with_module(img_path: str) -> str:
-    # Try native Python module first
-    try:
-        from pix2tex.cli import LatexOCR  # type: ignore
-        from PIL import Image as PILImage  # ensure PIL is present
-        model = LatexOCR()
-        im = PILImage.open(img_path).convert('RGB')
-        return model(im)
-    except Exception as e:
-        raise RuntimeError(f"pix2tex module path failed: {e}")
-
-def _predict_latex_with_cli(img_path: str) -> str:
-    # Fallback to CLI if available
-    import subprocess, shlex
-    try:
-        cmd = f"pix2tex \"{img_path}\""
-        out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, text=True, timeout=60)
-        return out.strip()
-    except Exception as e:
-        raise RuntimeError(f"pix2tex CLI failed: {e}")
-
-def _preprocess_image_to_png(raw_bytes: bytes) -> str:
-    # Save to temp PNG and do light preprocessing to help OCR
-    if Image is None:
-        # No PIL, just save as-is
-        fd, path = tempfile.mkstemp(suffix=".png")
-        with os.fdopen(fd, "wb") as f: f.write(raw_bytes)
-        return path
-    img = Image.open(io.BytesIO(raw_bytes)).convert("L")
-    # simple autocontrast + slight sharpen, pad
-    img = ImageOps.autocontrast(img, cutoff=2)
-    img = img.filter(ImageFilter.SHARPEN)
-    # pad 16px to avoid clipping
-    pad = 16
-    w, h = img.size
-    canvas = Image.new("L", (w+2*pad, h+2*pad), 255)
-    canvas.paste(img, (pad, pad))
-    fd, path = tempfile.mkstemp(suffix=".png")
-    with os.fdopen(fd, "wb") as f:
-        canvas.save(f, format="PNG")
-    return path
-
-@app.post("/ocr/latex")
-async def ocr_latex(image: UploadFile = File(...)):
-    try:
-        raw = await image.read()
-        img_path = _preprocess_image_to_png(raw)
-        # Try module, then CLI
-        try:
-            latex = _predict_latex_with_module(img_path)
-        except Exception as e1:
-            try:
-                latex = _predict_latex_with_cli(img_path)
-            except Exception as e2:
-                msg = "pix2tex not available. Install it with:\n  pip install pix2tex torch torchvision\n(Use CPU wheels if you have no GPU)."
-                return JSONResponse({"ok": False, "error": msg, "detail": [str(e1), str(e2)]}, status_code=501)
-        # Clean up latex a bit
-        latex = latex.strip().replace("\n", " ").strip()
-        return {"ok": True, "latex": latex}
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": f"OCR failed: {e}"}, status_code=500)
