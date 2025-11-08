@@ -245,3 +245,183 @@ details.help {
   border-radius: 12px;
   color: var(--muted);
 }
+
+/* Editor layout matching cards overview */
+.editor-page .wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.nav-links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.set-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+}
+
+.set-meta h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: 0.02em;
+}
+
+.set-meta .muted {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.cards-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cards-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.card-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.card-index {
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tools-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tools-row .btn {
+  flex: 0 0 auto;
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card-cell {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-cell.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(47, 107, 255, 0.18);
+}
+
+.card-cell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-side-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.card-cell.back .card-side-tag {
+  background: var(--accent-alt);
+}
+
+.canvas-card {
+  flex: 1;
+  display: flex;
+}
+
+.canvas-pad {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  touch-action: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.canvas-pad canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.canvas-pad .ink-layer {
+  pointer-events: none;
+}
+
+.canvas-pad .grid-layer {
+  pointer-events: none;
+}
+
+.editor-page .btn.pill {
+  padding: 0.5rem 1rem;
+  font-size: 14px;
+}
+
+body.editor-page {
+  touch-action: none;
+}
