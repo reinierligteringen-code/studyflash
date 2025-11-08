@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
-import os, io, csv, sqlite3, base64, tempfile, datetime as dt
+import os, io, csv, json, sqlite3, datetime as dt, secrets
 from typing import Optional
-from fastapi import FastAPI, Request, Form, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import FastAPI, Request, Form, UploadFile, File, Body, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from urllib.parse import urlencode
-
-# Optional imports for OCR
-try:
-    from PIL import Image, ImageOps, ImageFilter
-except Exception:
-    Image = None
 
 DB_PATH = os.environ.get("STUDY_DB", "study.db")
 
@@ -19,11 +14,258 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
 def connect():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys=ON;")
     return con
+
+DRAW_SCHEMA = """
+CREATE TABLE IF NOT EXISTS draw_sets (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at DATETIME DEFAULT (DATETIME('now')),
+    updated_at DATETIME DEFAULT (DATETIME('now'))
+);
+CREATE TABLE IF NOT EXISTS draw_cards (
+    set_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    card_json TEXT NOT NULL,
+    updated_at DATETIME DEFAULT (DATETIME('now')),
+    PRIMARY KEY (set_id, position),
+    FOREIGN KEY(set_id) REFERENCES draw_sets(id) ON DELETE CASCADE
+);
+"""
+
+
+def ensure_draw_schema():
+    con = connect()
+    try:
+        with con:
+            con.executescript(DRAW_SCHEMA)
+            count = con.execute("SELECT COUNT(*) AS c FROM draw_sets").fetchone()["c"]
+            if count == 0:
+                ensure_draw_set(con, "default", "Default", with_default=True)
+    finally:
+        con.close()
+
+
+ensure_draw_schema()
+
+
+def draw_set_row_to_dict(row):
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def empty_side():
+    return {"strokes": [], "images": []}
+
+
+def empty_card():
+    return {
+        "front": empty_side(),
+        "back": empty_side(),
+        "createdAt": int(dt.datetime.now().timestamp() * 1000),
+    }
+
+
+def load_draw_deck(con, set_id: str):
+    rows = con.execute(
+        "SELECT card_json FROM draw_cards WHERE set_id=? ORDER BY position",
+        (set_id,),
+    ).fetchall()
+    deck = []
+    for row in rows:
+        payload = row["card_json"]
+        if payload is None:
+            continue
+        try:
+            deck.append(json.loads(payload))
+        except (ValueError, TypeError):
+            continue
+    return deck
+
+
+def save_draw_deck(con, set_id: str, deck):
+    serialised = []
+    for card in deck or []:
+        try:
+            serialised.append(json.dumps(card))
+        except (TypeError, ValueError):
+            continue
+    with con:
+        con.execute("DELETE FROM draw_cards WHERE set_id=?", (set_id,))
+        for idx, payload in enumerate(serialised):
+            con.execute(
+                """INSERT INTO draw_cards(set_id, position, card_json, updated_at)
+                       VALUES(?,?,?,DATETIME('now'))""",
+                (set_id, idx, payload),
+            )
+        con.execute(
+            "UPDATE draw_sets SET updated_at=DATETIME('now') WHERE id=?",
+            (set_id,),
+        )
+
+
+def ensure_draw_set(con, set_id: str | None, name: str | None = None, *, with_default: bool = False):
+    if set_id:
+        row = con.execute("SELECT id, name FROM draw_sets WHERE id=?", (set_id,)).fetchone()
+        if row:
+            return row["id"], row["name"]
+    new_id = set_id or f"set_{secrets.token_hex(4)}"
+    new_name = (name or "New Set").strip() or "New Set"
+    with con:
+        con.execute(
+            "INSERT INTO draw_sets(id, name, created_at, updated_at) VALUES(?,?,DATETIME('now'),DATETIME('now'))",
+            (new_id, new_name),
+        )
+    if with_default:
+        save_draw_deck(con, new_id, [empty_card()])
+    return new_id, new_name
+
+
+def ensure_default_draw(con):
+    count = con.execute("SELECT COUNT(*) AS c FROM draw_sets").fetchone()["c"]
+    if count == 0:
+        ensure_draw_set(con, "default", "Default", with_default=True)
+
+
+@app.get("/api/draw/sets")
+def api_list_draw_sets():
+    con = connect()
+    try:
+        ensure_default_draw(con)
+        rows = con.execute(
+            "SELECT id, name, created_at, updated_at FROM draw_sets ORDER BY created_at"
+        ).fetchall()
+        return {"sets": [draw_set_row_to_dict(r) for r in rows]}
+    finally:
+        con.close()
+
+
+@app.post("/api/draw/sets")
+def api_create_draw_set(payload: dict = Body(...)):
+    name = (payload.get("name") or "New Set").strip() or "New Set"
+    requested_id = payload.get("id")
+    con = connect()
+    try:
+        if requested_id:
+            existing = con.execute(
+                "SELECT id FROM draw_sets WHERE id=?", (requested_id,)
+            ).fetchone()
+            if existing:
+                raise HTTPException(status_code=409, detail="Set id already exists")
+        new_id, new_name = ensure_draw_set(
+            con, requested_id, name, with_default=True
+        )
+        deck_payload = payload.get("deck")
+        if isinstance(deck_payload, list) and deck_payload:
+            save_draw_deck(con, new_id, deck_payload)
+        row = con.execute(
+            "SELECT id, name, created_at, updated_at FROM draw_sets WHERE id=?",
+            (new_id,),
+        ).fetchone()
+        return draw_set_row_to_dict(row)
+    finally:
+        con.close()
+
+
+@app.get("/api/draw/sets/{set_id}")
+def api_get_draw_set(set_id: str):
+    con = connect()
+    try:
+        row = con.execute(
+            "SELECT id, name, created_at, updated_at FROM draw_sets WHERE id=?",
+            (set_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Set not found")
+        deck = load_draw_deck(con, set_id)
+        data = draw_set_row_to_dict(row)
+        data["deckSize"] = len(deck)
+        return data
+    finally:
+        con.close()
+
+
+@app.put("/api/draw/sets/{set_id}")
+def api_update_draw_set(set_id: str, payload: dict = Body(...)):
+    name = payload.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise HTTPException(status_code=400, detail="Name is required")
+    name = name.strip()
+    con = connect()
+    try:
+        with con:
+            res = con.execute(
+                "UPDATE draw_sets SET name=?, updated_at=DATETIME('now') WHERE id=?",
+                (name, set_id),
+            )
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Set not found")
+        row = con.execute(
+            "SELECT id, name, created_at, updated_at FROM draw_sets WHERE id=?",
+            (set_id,),
+        ).fetchone()
+        return draw_set_row_to_dict(row)
+    finally:
+        con.close()
+
+
+@app.delete("/api/draw/sets/{set_id}")
+def api_delete_draw_set(set_id: str):
+    con = connect()
+    try:
+        with con:
+            res = con.execute("DELETE FROM draw_sets WHERE id=?", (set_id,))
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Set not found")
+        return {"ok": True}
+    finally:
+        con.close()
+
+
+@app.get("/api/draw/sets/{set_id}/deck")
+def api_get_draw_deck(set_id: str):
+    con = connect()
+    try:
+        row = con.execute("SELECT id FROM draw_sets WHERE id=?", (set_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Set not found")
+        deck = load_draw_deck(con, set_id)
+        return {"deck": deck}
+    finally:
+        con.close()
+
+
+@app.put("/api/draw/sets/{set_id}/deck")
+def api_put_draw_deck(set_id: str, payload: dict = Body(...)):
+    deck_payload = payload.get("deck")
+    if deck_payload is None:
+        raise HTTPException(status_code=400, detail="Deck payload required")
+    if not isinstance(deck_payload, list):
+        raise HTTPException(status_code=400, detail="Deck must be a list")
+    con = connect()
+    try:
+        ensure_draw_set(con, set_id, payload.get("name"))
+        save_draw_deck(con, set_id, deck_payload)
+        deck = load_draw_deck(con, set_id)
+        return {"deckSize": len(deck)}
+    finally:
+        con.close()
 
 def deck_list(con):
     return [r["name"] for r in con.execute("SELECT name FROM decks ORDER BY name")]
@@ -290,66 +532,3 @@ def rate(card_id: int, quality: int = Form(...), confidence: Optional[int] = For
     if tag: query["tag"] = tag
     qs = "?" + urlencode(query) if query else ""
     return RedirectResponse("/review" + qs, status_code=303)
-
-# ---------- OCR: Offline handwriting/typeset math -> LaTeX ----------
-def _predict_latex_with_module(img_path: str) -> str:
-    # Try native Python module first
-    try:
-        from pix2tex.cli import LatexOCR  # type: ignore
-        from PIL import Image as PILImage  # ensure PIL is present
-        model = LatexOCR()
-        im = PILImage.open(img_path).convert('RGB')
-        return model(im)
-    except Exception as e:
-        raise RuntimeError(f"pix2tex module path failed: {e}")
-
-def _predict_latex_with_cli(img_path: str) -> str:
-    # Fallback to CLI if available
-    import subprocess, shlex
-    try:
-        cmd = f"pix2tex \"{img_path}\""
-        out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, text=True, timeout=60)
-        return out.strip()
-    except Exception as e:
-        raise RuntimeError(f"pix2tex CLI failed: {e}")
-
-def _preprocess_image_to_png(raw_bytes: bytes) -> str:
-    # Save to temp PNG and do light preprocessing to help OCR
-    if Image is None:
-        # No PIL, just save as-is
-        fd, path = tempfile.mkstemp(suffix=".png")
-        with os.fdopen(fd, "wb") as f: f.write(raw_bytes)
-        return path
-    img = Image.open(io.BytesIO(raw_bytes)).convert("L")
-    # simple autocontrast + slight sharpen, pad
-    img = ImageOps.autocontrast(img, cutoff=2)
-    img = img.filter(ImageFilter.SHARPEN)
-    # pad 16px to avoid clipping
-    pad = 16
-    w, h = img.size
-    canvas = Image.new("L", (w+2*pad, h+2*pad), 255)
-    canvas.paste(img, (pad, pad))
-    fd, path = tempfile.mkstemp(suffix=".png")
-    with os.fdopen(fd, "wb") as f:
-        canvas.save(f, format="PNG")
-    return path
-
-@app.post("/ocr/latex")
-async def ocr_latex(image: UploadFile = File(...)):
-    try:
-        raw = await image.read()
-        img_path = _preprocess_image_to_png(raw)
-        # Try module, then CLI
-        try:
-            latex = _predict_latex_with_module(img_path)
-        except Exception as e1:
-            try:
-                latex = _predict_latex_with_cli(img_path)
-            except Exception as e2:
-                msg = "pix2tex not available. Install it with:\n  pip install pix2tex torch torchvision\n(Use CPU wheels if you have no GPU)."
-                return JSONResponse({"ok": False, "error": msg, "detail": [str(e1), str(e2)]}, status_code=501)
-        # Clean up latex a bit
-        latex = latex.strip().replace("\n", " ").strip()
-        return {"ok": True, "latex": latex}
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": f"OCR failed: {e}"}, status_code=500)

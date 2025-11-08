@@ -1,405 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Study Cards — Editor</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <script>
-    window.MathJax = {
-      tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']]},
-      svg:{fontCache:'global'}
-    };
-  </script>
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Study Suite — Home</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="sets.js"></script>
   <style>
-    :root{
-      --brand:#0a84ff; --ink:#111; --ink-2:#555;
-      --bg:#f6f7fb; --panel:#ffffff; --line:#e7e7ee;
-      --accent:#0a84ff; --warn:#ef4444;
-      --toolbar-h:56px; --sidebar-w:420px;
-      --grid-bg:#e9f1ff;
+    header { position: static; border-bottom: none; background: transparent; }
+    header .wrap { max-width: 960px; margin: 0 auto; padding: 36px 16px 12px; display:flex; flex-direction:column; gap:8px; }
+    header h1 { font-size: 32px; letter-spacing: 0.4px; }
+    header p { margin: 0; color: var(--muted); max-width: 640px; }
+    main { max-width: 960px; margin: 0 auto; padding: 0 16px 80px; display:flex; flex-direction:column; gap:32px; }
+    .actions { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); }
+    .card-link {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:18px 20px;
+      background:var(--surface);
+      text-decoration:none;
+      color:var(--text);
+      box-shadow:var(--shadow-sm);
+      transition: transform 140ms ease, box-shadow 140ms ease;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
-    /* Lock page width; only sidebar may scroll vertically */
-    body, #app{width:100vw; max-width:100vw}
-    .header{position:sticky;top:0;z-index:100;height:56px;display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
-    .header a.back{text-decoration:none;color:var(--ink-2);padding:6px 10px;border:1px solid var(--line);border-radius:10px}
-    .header .title{font-weight:600}
-    .wrap{height:calc(100svh - 56px); display:grid; grid-template-columns:var(--sidebar-w) 1fr; width:100vw; max-width:100vw}
-    @supports not (height: 100svh){ .wrap{height:calc(100vh - 56px)} }
-    @media (max-width:980px){
-      .wrap{grid-template-columns:1fr;height:calc(100svh - 56px)}
-      .canvasPane{height:70svh}
-    }
-    .sidebar{overflow:auto; -webkit-overflow-scrolling:touch; background:var(--panel); border-right:1px solid var(--line); padding:16px 16px 100px}
-    .section{margin-bottom:18px}
-    .section h3{margin:0 0 10px;font-size:15px}
-    label{display:block;font-size:12px;color:var(--ink-2);margin:10px 0 6px}
-    input[type=text],textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;color:var(--ink);resize:vertical}
-    textarea{min-height:84px}
-    .preview{border:1px dashed var(--line);background:#fff;border-radius:12px;padding:12px;min-height:72px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .muted{color:var(--ink-2);font-size:12px}
-    button{border:1px solid var(--line);background:#fff;padding:9px 12px;border-radius:12px;cursor:pointer;user-select:none}
-    button.primary{border-color:var(--accent);background:var(--accent);color:#fff}
-    button.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(10,132,255,.15)}
-    button:disabled{opacity:.6;cursor:not-allowed}
-    .tag{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12px;margin-right:6px;margin-top:6px}
-
-    .canvasPane{position:relative;background:#fff;height:100%; width:100%; max-width:100vw}
-    .toolbar{height:var(--toolbar-h);display:flex;gap:10px;align-items:center;padding:10px 12px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
-    .toolbar .group{display:flex;gap:6px;align-items:center}
-    input[type=range]{width:140px}
-    .spacer{flex:1}
-    .pad{position:relative;width:100%;height:calc(100% - var(--toolbar-h));touch-action:none;overscroll-behavior:contain;background:var(--grid-bg)}
-    canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-
-    /* Disable selection/highlight only while drawing */
-    body.drawing, body.drawing *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+    .card-link span { color: var(--muted); font-size: 13px; }
+    .card-link:hover { transform: translateY(-2px); box-shadow:var(--shadow-md); }
+    .recent-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .recent-header h2 { margin:0; font-size:20px; }
+    .btn { padding:9px 12px; border-radius:10px; text-decoration:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    .btn:hover { transform: translateY(-1px); box-shadow:var(--shadow-sm); }
+    .actions-inline { display:flex; gap:8px; flex-wrap:wrap; }
+    .sets-list { display:grid; gap:12px; }
+    .set-card { border:1px solid var(--border); border-radius:14px; padding:14px 16px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; }
+    .set-info { display:flex; flex-direction:column; gap:4px; }
+    .set-info .muted { font-size:12px; }
+    .set-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .empty { border:1px dashed var(--border); padding:18px; border-radius:14px; color:var(--muted); background:rgba(255,255,255,0.8); text-align:center; }
   </style>
 </head>
 <body>
-<div id="app">
-  <div class="header">
-    <a class="back" href="./index.html">← Home</a>
-    <div class="title">Edit Flashcard</div>
-    <div class="spacer"></div>
-    <div class="muted">LaTeX supported: <code>$...$</code> or <code>$$...$$</code></div>
-  </div>
-
-  <div class="wrap">
-    <!-- LEFT -->
-    <aside class="sidebar">
-      <div class="section">
-        <label for="title">Title</label>
-        <input id="title" type="text" placeholder="e.g. Week 2 — MRS and Budget Line">
-      </div>
-
-      <div class="section">
-        <h3>Front (Question)</h3>
-        <label for="frontInput">Text (LaTeX allowed)</label>
-        <textarea id="frontInput" placeholder="Type the question… e.g. Show that $MRS=\\frac{p_x}{p_y}$ at an interior optimum."></textarea>
-        <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
-        <div id="frontPreview" class="preview"></div>
-      </div>
-
-      <div class="section">
-        <h3>Back (Answer)</h3>
-        <label for="backInput">Text (LaTeX allowed)</label>
-        <textarea id="backInput" placeholder="Sketch the steps… e.g. $$MRS=\\frac{MU_x}{MU_y}=\\frac{p_x}{p_y}$$"></textarea>
-        <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
-        <div id="backPreview" class="preview"></div>
-      </div>
-
-      <div class="section">
-        <h3>Attach drawing to…</h3>
-        <div class="row">
-          <label class="tag"><input type="radio" name="attachTo" value="front" checked> Front</label>
-          <label class="tag"><input type="radio" name="attachTo" value="back"> Back</label>
-          <button id="snapshotBtn">Insert canvas snapshot</button>
-          <button id="clearImgsBtn">Remove all images</button>
-        </div>
-        <div class="muted" style="margin-top:6px">Use the canvas to the right; click “Insert canvas snapshot”.</div>
-      </div>
-
-      <div class="section row">
-        <button id="saveBtn" class="primary">Save card (JSON)</button>
-        <button id="downloadPNG">Download preview as PNG</button>
-        <button id="clearTextBtn" style="color:var(--warn);border-color:var(--warn)">Clear text</button>
-      </div>
-    </aside>
-
-    <!-- RIGHT -->
-    <section class="canvasPane">
-      <div class="toolbar">
-        <div class="group">
-          <button id="penBtn" class="active" title="Pen (P)">Pen</button>
-          <button id="eraserBtn" title="Eraser (E)">Eraser</button>
-        </div>
-        <div class="group">
-          <label for="size">Size</label>
-          <input id="size" type="range" min="0.5" max="6" step="0.1" value="1.3">
-          <span id="sizeVal">1.3</span> px
-        </div>
-        <div class="group">
-          <label for="grid">Grid</label>
-          <input id="grid" type="range" min="10" max="40" step="2" value="24">
-          <span id="gridVal">24</span> px
-          <button id="toggleGrid">Toggle grid</button>
-        </div>
-        <div class="group">
-          <button id="undoBtn" title="Undo (Ctrl/Cmd+Z)">Undo</button>
-          <button id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
-          <button id="clearBtn">Clear</button>
-          <button id="exportCanvasBtn">Export PNG</button>
-        </div>
-        <div class="spacer"></div>
-      </div>
-
-      <div class="pad" id="pad">
-        <canvas id="gridCanvas"></canvas>
-        <canvas id="drawCanvas"></canvas>
+  <header>
+    <div class="wrap">
+      <h1>Study Suite</h1>
+      <p>Draw rich flashcards, manage decks, and rehearse in the browser. Everything stays on your device unless you export it.</p>
+    </div>
+  </header>
+  <main>
+    <section>
+      <div class="actions">
+        <a class="card-link" href="manage.html">
+          <strong>Manage Sets</strong>
+          <span>Create, rename, delete, import, or export decks stored in this browser.</span>
+        </a>
+        <a class="card-link" href="rehearse.html">
+          <strong>Rehearse</strong>
+          <span>Flip through your cards with keyboard shortcuts and shuffle when needed.</span>
+        </a>
+        <a class="card-link" id="open-default" href="editor.html">
+          <strong>Open Editor</strong>
+          <span>Jump straight into drawing mode for the most recent set.</span>
+        </a>
       </div>
     </section>
-  </div>
-</div>
+
+    <section>
+      <div class="recent-header">
+        <h2>Recent Sets</h2>
+        <div class="actions-inline">
+          <button class="btn" id="btn-new-set">➕ New set</button>
+          <a class="btn" href="manage.html">Open manager</a>
+        </div>
+      </div>
+      <div id="sets-list" class="sets-list"></div>
+    </section>
+  </main>
 
   <script>
-    // ---------- Left: Previews ----------
-    const frontInput=document.getElementById('frontInput');
-    const backInput=document.getElementById('backInput');
-    const frontPreview=document.getElementById('frontPreview');
-    const backPreview=document.getElementById('backPreview');
-    const titleInput=document.getElementById('title');
+    const setsList = document.getElementById('sets-list');
+    const openDefaultLink = document.getElementById('open-default');
+    const btnNewSet = document.getElementById('btn-new-set');
 
-    function renderPreview(el, text){
-      const safe=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      el.innerHTML=safe.replace(/\n/g,'<br/>');
-      if (window.MathJax?.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{});
-    }
-    function refresh(){ renderPreview(frontPreview,frontInput.value); renderPreview(backPreview,backInput.value); }
-    frontInput.addEventListener('input',refresh); backInput.addEventListener('input',refresh); window.addEventListener('load',refresh);
-
-    function attachSide(){return (document.querySelector('input[name="attachTo"]:checked')||{}).value||'front';}
-    document.getElementById('snapshotBtn').addEventListener('click',()=>{
-      const url=exportMergedCanvas(); const img=new Image(); img.src=url; img.style.maxWidth='100%'; img.style.marginTop='8px';
-      (attachSide()==='front'?frontPreview:backPreview).appendChild(img);
-    });
-    document.getElementById('clearImgsBtn').addEventListener('click',()=>[frontPreview,backPreview].forEach(p=>[...p.querySelectorAll('img')].forEach(n=>n.remove())));
-    document.getElementById('saveBtn').addEventListener('click',()=>{
-      const card={title:titleInput.value.trim(),front:frontPreview.innerHTML,back:backPreview.innerHTML,createdAt:new Date().toISOString()};
-      const blob=new Blob([JSON.stringify(card,null,2)],{type:'application/json'});
-      const a=document.createElement('a'); a.download=(card.title||'flashcard').replace(/[^\w\-]+/g,'_')+'.json'; a.href=URL.createObjectURL(blob); a.click(); URL.revokeObjectURL(a.href);
-    });
-    document.getElementById('downloadPNG').addEventListener('click',()=>{
-      const c=document.createElement('canvas'); c.width=800; c.height=1000; const cx=c.getContext('2d');
-      cx.fillStyle='#fff'; cx.fillRect(0,0,800,1000);
-      const el=document.createElement('div');
-      el.style.width='800px'; el.style.padding='20px'; el.style.fontFamily='system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif';
-      el.innerHTML='<h3>'+ (titleInput.value||'Flashcard') +'</h3><h4>Front</h4>'+frontPreview.outerHTML+'<h4>Back</h4>'+backPreview.outerHTML;
-      const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><foreignObject width="100%" height="100%">${new XMLSerializer().serializeToString(el)}</foreignObject></svg>`;
-      const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'})); const img=new Image();
-      img.onload=()=>{cx.drawImage(img,0,0);URL.revokeObjectURL(url);const a=document.createElement('a');a.download=(titleInput.value||'flashcard')+'.png';a.href=c.toDataURL('image/png');a.click();};
-      img.src=url;
-    });
-    document.getElementById('clearTextBtn').addEventListener('click',()=>{frontInput.value='';backInput.value='';refresh();});
-
-    // ---------- Right: Canvas (smoothed brush, palm rejection, full-screen fit) ----------
-    const pad=document.getElementById('pad');
-    const gridCanvas=document.getElementById('gridCanvas');
-    const drawCanvas=document.getElementById('drawCanvas');
-    const gtx=gridCanvas.getContext('2d',{desynchronized:true});
-    const ctx=drawCanvas.getContext('2d',{desynchronized:true});
-
-    const penBtn=document.getElementById('penBtn');
-    const eraserBtn=document.getElementById('eraserBtn');
-    const sizeInputR=document.getElementById('size'); const sizeVal=document.getElementById('sizeVal');
-    const gridInput=document.getElementById('grid'); const gridVal=document.getElementById('gridVal');
-    const toggleGridBtn=document.getElementById('toggleGrid');
-    const undoBtn=document.getElementById('undoBtn'); const redoBtn=document.getElementById('redoBtn'); const clearBtn=document.getElementById('clearBtn');
-    const exportCanvasBtn=document.getElementById('exportCanvasBtn');
-
-    let dpr=Math.max(1,window.devicePixelRatio||1);
-    let mode='pen', gridVisible=true;
-
-    let undoStack=[], redoStack=[];
-
-    function setCanvasSize(){
-      const r=pad.getBoundingClientRect();
-      dpr=Math.max(1,window.devicePixelRatio||1);
-      [gridCanvas,drawCanvas].forEach(c=>{
-        c.style.width=r.width+'px'; c.style.height=r.height+'px';
-        c.width=Math.round(r.width*dpr); c.height=Math.round(r.height*dpr);
-      });
-      gtx.setTransform(dpr,0,0,dpr,0,0);
-      ctx.setTransform(dpr,0,0,dpr,0,0);
-      drawGrid(); restoreLatest();
-    }
-    function drawGrid(){
-      gtx.clearRect(0,0,gridCanvas.width,gridCanvas.height);
-      if(!gridVisible) return;
-      const spacing=Number(gridInput.value);
-      const r=pad.getBoundingClientRect(); const w=r.width, h=r.height;
-      gtx.save(); gtx.strokeStyle='rgba(0,0,0,.08)'; gtx.lineWidth=1; gtx.beginPath();
-      for(let x=0.5;x<=w;x+=spacing){gtx.moveTo(x,0);gtx.lineTo(x,h);}
-      for(let y=0.5;y<=h;y+=spacing){gtx.moveTo(0,y);gtx.lineTo(w,y);}
-      gtx.stroke(); gtx.restore();
-    }
-
-    // ---- One-Euro filter for jitter reduction ----
-    class OneEuro {
-      constructor(minCutoff=1.2, beta=0.25, dCutoff=1.6){
-        this.minCutoff=minCutoff; this.beta=beta; this.dCutoff=dCutoff;
-        this.xf=null; this.yf=null; this.dx=0; this.dy=0; this.lastT=null;
-      }
-      alpha(cutoff, dt){ const tau = 1/(2*Math.PI*cutoff); return 1/(1+tau/dt); }
-      filter(x,y,t){
-        if(this.lastT==null){ this.lastT=t; this.xf=x; this.yf=y; return {x,y}; }
-        const dt=Math.max(1/240,(t-this.lastT)/1000); this.lastT=t;
-        const aD=this.alpha(this.dCutoff,dt);
-        const dxf=aD*((x-this.xf)/dt)+(1-aD)*this.dx;
-        const dyf=aD*((y-this.yf)/dt)+(1-aD)*this.dy;
-        this.dx=dxf; this.dy=dyf;
-        const cutoffX=this.minCutoff + this.beta*Math.abs(dxf);
-        const cutoffY=this.minCutoff + this.beta*Math.abs(dyf);
-        const ax=this.alpha(cutoffX,dt), ay=this.alpha(cutoffY,dt);
-        this.xf=ax*x+(1-ax)*this.xf;
-        this.yf=ay*y+(1-ay)*this.yf;
-        return {x:this.xf, y:this.yf};
-      }
-      reset(){ this.xf=this.yf=this.lastT=null; this.dx=this.dy=0; }
-    }
-    const euro=new OneEuro(); // tuned for Pencil jitter
-
-    // ---- Smoothed stroke using mid-point quadratic curves ----
-    let isDrawing=false, activePointerId=null, points=[];
-
-    function canvasPoint(e){
-      const r=drawCanvas.getBoundingClientRect();
-      return {x:e.clientX - r.left, y:e.clientY - r.top, t:performance.now()};
-    }
-    function penWidth(e){
-      const base=Number(sizeInputR.value);
-      const pressure=(e.pressure && e.pressure>0)? e.pressure : 0.6;
-      const scale=(mode==='eraser')?3.2:(0.9+pressure*1.1);
-      return base*scale;
-    }
-    function setupCtx(e){
-      ctx.lineCap='round'; ctx.lineJoin='round'; ctx.miterLimit=2;
-      ctx.lineWidth=penWidth(e);
-      ctx.globalCompositeOperation = (mode==='eraser') ? 'destination-out' : 'source-over';
-      if(mode!=='eraser') ctx.strokeStyle='#111';
-    }
-
-    function pushUndo(){
-      const snap=document.createElement('canvas'); snap.width=drawCanvas.width; snap.height=drawCanvas.height;
-      snap.getContext('2d').drawImage(drawCanvas,0,0); undoStack.push(snap);
-      if(undoStack.length>40) undoStack.shift();
-    }
-    function restoreLatest(){
-      ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
-      const last=undoStack[undoStack.length-1];
-      if(last && last.width===drawCanvas.width && last.height===drawCanvas.height){
-        ctx.drawImage(last,0,0);
-      } else if(last){ undoStack.length=0; }
-    }
-
-    function startStroke(e){
-      // stylus only (mouse left allowed), ignore finger/palm
-      if (e.pointerType!=='pen' && !(e.pointerType==='mouse' && e.button===0)) return;
-      e.preventDefault();
-      drawCanvas.setPointerCapture?.(e.pointerId);
-      activePointerId=e.pointerId; isDrawing=true; document.body.classList.add('drawing'); euro.reset();
-      pushUndo(); points.length=0;
-
-      const evts = (e.getCoalescedEvents && e.getCoalescedEvents().length)? e.getCoalescedEvents() : [e];
-      evts.forEach(ev=>{
-        const p=canvasPoint(ev); const f=euro.filter(p.x,p.y,p.t); points.push(f);
-      });
-
-      // seed dot so first mark appears instantly
-      setupCtx(e);
-      ctx.beginPath(); ctx.arc(points[0].x, points[0].y, ctx.lineWidth/2, 0, Math.PI*2);
-      if(mode==='eraser') ctx.fillStyle='#000'; else ctx.fillStyle='#111'; ctx.fill();
-    }
-
-    function moveStroke(e){
-      if(!isDrawing || e.pointerId!==activePointerId) return;
-      e.preventDefault();
-      const evts = (e.getCoalescedEvents && e.getCoalescedEvents().length)? e.getCoalescedEvents() : [e];
-      setupCtx(e);
-
-      evts.forEach(ev=>{
-        const p=canvasPoint(ev);
-        const f=euro.filter(p.x,p.y,p.t);
-        points.push(f);
-
-        if(points.length>=3){
-          const len=points.length;
-          const p0=points[len-3], p1=points[len-2], p2=points[len-1];
-          const m1x=(p0.x+p1.x)/2, m1y=(p0.y+p1.y)/2;
-          const m2x=(p1.x+p2.x)/2, m2y=(p1.y+p2.y)/2;
-          ctx.beginPath();
-          ctx.moveTo(m1x, m1y);
-          ctx.quadraticCurveTo(p1.x, p1.y, m2x, m2y);
-          ctx.stroke();
+    async function renderSets() {
+      setsList.innerHTML = '';
+      let sets = [];
+      if (window.SetsAPI) {
+        try {
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error('Unable to load sets', err);
         }
-      });
+      }
+      sets = Array.isArray(sets) ? [...sets].sort((a, b) => a.createdAt - b.createdAt) : [];
+
+      if (!sets.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No sets yet. Create one to get started!';
+        setsList.appendChild(empty);
+        openDefaultLink.href = 'editor.html';
+        openDefaultLink.querySelector('span').textContent = 'Jump straight into drawing mode.';
+        return;
+      }
+
+      const latest = sets[sets.length - 1];
+      openDefaultLink.href = `editor.html?set=${encodeURIComponent(latest.id)}`;
+      openDefaultLink.querySelector('span').textContent = `Continue editing “${latest.name}”.`;
+
+      for (const set of sets) {
+        const card = document.createElement('div');
+        card.className = 'set-card';
+        card.innerHTML = `
+          <div class="set-info">
+            <strong>${set.name}</strong>
+            <span class="muted">${set.id}</span>
+          </div>
+          <div class="set-actions">
+            <a class="btn" href="editor.html?set=${encodeURIComponent(set.id)}">✏️ Edit</a>
+            <a class="btn" href="rehearse.html?set=${encodeURIComponent(set.id)}">📖 Rehearse</a>
+            <a class="btn" href="cards.html?set=${encodeURIComponent(set.id)}">🗂 Cards</a>
+          </div>
+        `;
+        setsList.appendChild(card);
+      }
     }
 
-    function endStroke(e){
-      if(!isDrawing || e.pointerId!==activePointerId) return;
-      e.preventDefault();
-      isDrawing=false; activePointerId=null; points.length=0; redoStack.length=0; document.body.classList.remove('drawing');
-    }
-
-    function doUndo(){
-      if(!undoStack.length) return;
-      const cur=document.createElement('canvas'); cur.width=drawCanvas.width; cur.height=drawCanvas.height; cur.getContext('2d').drawImage(drawCanvas,0,0);
-      redoStack.push(cur);
-      const prev=undoStack.pop();
-      ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height); if(prev) ctx.drawImage(prev,0,0);
-    }
-    function doRedo(){
-      if(!redoStack.length) return;
-      const cur=document.createElement('canvas'); cur.width=drawCanvas.width; cur.height=drawCanvas.height; cur.getContext('2d').drawImage(drawCanvas,0,0);
-      undoStack.push(cur);
-      const next=redoStack.pop();
-      ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height); if(next) ctx.drawImage(next,0,0);
-    }
-
-    // Export merged canvas (grid+ink)
-    function exportMergedCanvas(){
-      const r=pad.getBoundingClientRect();
-      const out=document.createElement('canvas'); out.width=Math.round(r.width*dpr); out.height=Math.round(r.height*dpr);
-      const ex=out.getContext('2d'); ex.setTransform(dpr,0,0,dpr,0,0);
-      if(gridVisible) ex.drawImage(gridCanvas,0,0,out.width,out.height);
-      ex.drawImage(drawCanvas,0,0,out.width,out.height);
-      return out.toDataURL('image/png');
-    }
-    window.exportMergedCanvas=exportMergedCanvas;
-    exportCanvasBtn.addEventListener('click',()=>{const a=document.createElement('a');a.download='canvas.png';a.href=exportMergedCanvas();a.click();});
-
-    // UI wiring
-    function setMode(m){mode=m;penBtn.classList.toggle('active',m==='pen');eraserBtn.classList.toggle('active',m==='eraser');}
-    penBtn.addEventListener('click',()=>setMode('pen'));
-    eraserBtn.addEventListener('click',()=>setMode('eraser'));
-    sizeInputR.addEventListener('input',()=>sizeVal.textContent=sizeInputR.value);
-    gridInput.addEventListener('input',()=>{gridVal.textContent=gridInput.value;drawGrid();});
-    toggleGridBtn.addEventListener('click',()=>{gridVisible=!gridVisible;drawGrid();});
-    undoBtn.addEventListener('click',doUndo);
-    redoBtn.addEventListener('click',doRedo);
-    clearBtn.addEventListener('click',()=>{pushUndo();ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);redoStack.length=0;});
-
-    // Keyboard shortcuts
-    window.addEventListener('keydown',(e)=>{
-      if(e.key==='p'||e.key==='P') setMode('pen');
-      if(e.key==='e'||e.key==='E') setMode('eraser');
-      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){e.preventDefault();doUndo();}
-      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&e.shiftKey){e.preventDefault();doRedo();}
+    btnNewSet.addEventListener('click', async () => {
+      if (!window.SetsAPI) return;
+      const name = prompt('Name for the new set:', 'New Set');
+      if (name === null) return;
+      try {
+        const set = await SetsAPI.createSet(name.trim() || 'New Set');
+        await renderSets();
+        location.href = `editor.html?set=${encodeURIComponent(set.id)}`;
+      } catch (err) {
+        alert('Unable to create set right now. Please try again.');
+        console.error(err);
+      }
     });
 
-    // Pointer events (stylus only). Also listen to pointerrawupdate if available for higher rate.
-    drawCanvas.addEventListener('pointerdown',startStroke,{passive:false});
-    drawCanvas.addEventListener('pointermove', moveStroke,{passive:false});
-    drawCanvas.addEventListener('pointerrawupdate', moveStroke,{passive:false});
-    window.addEventListener('pointerup',   endStroke,{passive:false});
-    window.addEventListener('pointercancel',endStroke,{passive:false});
-    window.addEventListener('blur', endStroke);
-
-    // Prevent any default touch scrolling on the pad
-    pad.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
-    pad.addEventListener('touchmove', e=>e.preventDefault(),{passive:false});
-
-    const ro=new ResizeObserver(setCanvasSize); ro.observe(pad);
-    window.addEventListener('orientationchange', setCanvasSize);
-    window.addEventListener('load', setCanvasSize);
-
-    sizeVal.textContent=sizeInputR.value; gridVal.textContent=gridInput.value;
-    setCanvasSize(); // initial size + draw grid
-    // start with a blank snapshot so first undo works
-    (function seed(){ const s=document.createElement('canvas'); s.width=drawCanvas.width; s.height=drawCanvas.height; undoStack.push(s); })();
+    renderSets();
   </script>
 </body>
 </html>
