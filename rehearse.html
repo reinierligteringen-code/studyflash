@@ -23,9 +23,12 @@
       color: var(--muted);
       font-size: 14px;
     }
+    .rehearse-page .card-cell {
+      cursor: pointer;
+    }
     .rehearse-pad {
       aspect-ratio: 3 / 2;
-      cursor: default;
+      cursor: inherit;
     }
     .rehearse-pad canvas {
       pointer-events: none;
@@ -138,6 +141,7 @@
         if (cardCell) {
           cardCell.classList.toggle('back', side === 'back');
           cardCell.classList.toggle('front', side !== 'back');
+          cardCell.setAttribute('aria-pressed', side === 'back' ? 'true' : 'false');
         }
       }
 
@@ -403,6 +407,12 @@
         }
       }
 
+      function toggleSide() {
+        if (!deck.length) return;
+        side = side === 'front' ? 'back' : 'front';
+        render();
+      }
+
       btnPrev?.addEventListener('click', () => {
         if (index > 0) {
           index -= 1;
@@ -420,9 +430,25 @@
       });
 
       btnFlip?.addEventListener('click', () => {
-        side = side === 'front' ? 'back' : 'front';
-        render();
+        toggleSide();
       });
+
+      cardCell?.addEventListener('click', () => {
+        toggleSide();
+      });
+
+      cardCell?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleSide();
+        }
+      });
+
+      if (cardCell) {
+        cardCell.setAttribute('role', 'button');
+        cardCell.setAttribute('tabindex', '0');
+        cardCell.setAttribute('aria-label', 'Flashcard. Click or press space to flip');
+      }
 
       btnShuffle?.addEventListener('click', () => {
         deck = [...deck].sort(() => Math.random() - 0.5);
