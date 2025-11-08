@@ -1,15 +1,20 @@
-(() => {
+(async () => {
   const params = new URLSearchParams(location.search);
   let setId = params.get('set');
 
-  function ensureSetId() {
+  async function ensureSetId() {
     if (!window.SetsAPI) {
       return setId || 'default';
     }
-    const sets = SetsAPI.loadSets();
+    let sets = [];
+    try {
+      sets = await SetsAPI.loadSets();
+    } catch (err) {
+      console.error('Unable to load sets', err);
+    }
     if (!sets.length) {
-      setId = 'default';
-      return setId;
+      const created = await SetsAPI.createSet('Default');
+      sets = [created];
     }
     if (!setId) {
       setId = sets[sets.length - 1].id;
@@ -17,8 +22,7 @@
       history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
       return setId;
     }
-    const exists = SetsAPI.getSetById(setId);
-    if (!exists) {
+    if (!sets.some((s) => s.id === setId)) {
       setId = sets[sets.length - 1].id;
       params.set('set', setId);
       history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
@@ -26,12 +30,21 @@
     return setId;
   }
 
-  setId = ensureSetId();
+  setId = await ensureSetId();
   const STORAGE_KEY = `study_deck_v2__${setId}`;
 
   const setNameEl = document.getElementById('setName');
-  if (setNameEl && window.SetsAPI) {
-    setNameEl.textContent = SetsAPI.getSetName(setId);
+  if (setNameEl) {
+    if (window.SetsAPI) {
+      try {
+        setNameEl.textContent = await SetsAPI.getSetName(setId);
+      } catch (err) {
+        console.error('Unable to resolve set name', err);
+        setNameEl.textContent = setId;
+      }
+    } else {
+      setNameEl.textContent = setId;
+    }
   }
 
   const cardsLink = document.getElementById('cardsLink');
@@ -76,7 +89,23 @@
     return { front: createEmptySide(), back: createEmptySide(), createdAt: Date.now() };
   }
 
-  function loadDeck() {
+  async function loadDeck() {
+    if (window.SetsAPI) {
+      try {
+        const deck = await SetsAPI.loadDeck(setId);
+        if (Array.isArray(deck) && deck.length) {
+          state.deck = deck;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(deck));
+          return;
+        }
+        state.deck = [createCard()];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state.deck));
+        await SetsAPI.saveDeck(setId, state.deck);
+        return;
+      } catch (err) {
+        console.error('Unable to load deck from server', err);
+      }
+    }
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       try {
@@ -90,11 +119,45 @@
       }
     }
     state.deck = [createCard()];
-    saveDeck();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.deck));
   }
 
-  function saveDeck() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.deck));
+  function snapshotDeck() {
+    return JSON.parse(JSON.stringify(state.deck));
+  }
+
+  let saveTimer = null;
+  let pendingSnapshot = null;
+
+  async function flushSave(snapshot) {
+    if (!window.SetsAPI || !snapshot) return;
+    try {
+      await SetsAPI.saveDeck(setId, snapshot);
+    } catch (err) {
+      console.error('Deck sync failed', err);
+    }
+  }
+
+  function saveDeck({ immediate = false } = {}) {
+    const snapshot = snapshotDeck();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    pendingSnapshot = snapshot;
+    if (!window.SetsAPI) return;
+    if (immediate) {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = null;
+      const snap = pendingSnapshot;
+      pendingSnapshot = null;
+      flushSave(snap);
+      return;
+    }
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      const snap = pendingSnapshot;
+      pendingSnapshot = null;
+      flushSave(snap);
+    }, 350);
   }
 
   function clampIndex() {
@@ -142,7 +205,7 @@
         }
         attachImages(state.deck);
         refresh();
-        saveDeck();
+        saveDeck({ immediate: true });
       }
     } catch (err) {
       console.error('Unable to restore snapshot', err);
@@ -172,7 +235,7 @@
     copy.createdAt = Date.now();
     state.deck.splice(state.index + 1, 0, copy);
     state.index += 1;
-    saveDeck();
+    saveDeck({ immediate: true });
     refresh();
   }
 
@@ -186,7 +249,7 @@
     } else if (state.index >= state.deck.length) {
       state.index = state.deck.length - 1;
     }
-    saveDeck();
+    saveDeck({ immediate: true });
     refresh();
   }
 
@@ -194,7 +257,7 @@
     pushUndoSnapshot();
     state.deck.splice(state.index + 1, 0, createCard());
     state.index += 1;
-    saveDeck();
+    saveDeck({ immediate: true });
     refresh();
   }
 
@@ -726,8 +789,18 @@
     if (evt.key === 'ArrowRight') { evt.preventDefault(); nextCard(); }
   });
 
-  loadDeck();
+  await loadDeck();
   attachImages(state.deck);
   setActiveSide('front');
   refresh();
+
+  window.addEventListener('beforeunload', () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    const snap = pendingSnapshot || snapshotDeck();
+    pendingSnapshot = null;
+    flushSave(snap);
+  });
 })();

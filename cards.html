@@ -170,60 +170,55 @@
   </div>
 
   <script>
-    const params = new URLSearchParams(location.search);
-    const requestedSet = params.get('set');
-    const setNameEl = document.getElementById('setName');
-    const cardCountEl = document.getElementById('cardCount');
-    const cardsGrid = document.getElementById('cardsGrid');
-    const emptyState = document.getElementById('emptyState');
-    const editLink = document.getElementById('editLink');
-    const rehearseLink = document.getElementById('rehearseLink');
-    const changeSetBtn = document.getElementById('changeSet');
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      const requestedSet = params.get('set');
+      const setNameEl = document.getElementById('setName');
+      const cardCountEl = document.getElementById('cardCount');
+      const cardsGrid = document.getElementById('cardsGrid');
+      const emptyState = document.getElementById('emptyState');
+      const editLink = document.getElementById('editLink');
+      const rehearseLink = document.getElementById('rehearseLink');
+      const changeSetBtn = document.getElementById('changeSet');
 
-    const BASE_WIDTH = 1200;
-    const BASE_HEIGHT = 800;
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const rootStyles = getComputedStyle(document.documentElement);
-    const canvasBackground = (rootStyles.getPropertyValue('--surface') || '#ffffff').trim() || '#ffffff';
+      const BASE_WIDTH = 1200;
+      const BASE_HEIGHT = 800;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const rootStyles = getComputedStyle(document.documentElement);
+      const canvasBackground = (rootStyles.getPropertyValue('--surface') || '#ffffff').trim() || '#ffffff';
 
-    function resolveSetId() {
-      if (!window.SetsAPI) return 'default';
-      const sets = SetsAPI.loadSets();
-      if (!sets.length) return 'default';
-      let active = requestedSet;
-      if (!active || !SetsAPI.getSetById(active)) {
-        active = sets[sets.length - 1].id;
-      }
-      if (active !== requestedSet) {
-        params.set('set', active);
-        const url = new URL(location.href);
-        url.search = params.toString();
-        history.replaceState({}, '', url.toString());
-      }
-      return active;
-    }
-
-    const activeSetId = resolveSetId();
-
-    function loadDeck() {
-      const key = window.SetsAPI ? SetsAPI.storageKeyFor(activeSetId) : `study_deck_v2__${activeSetId}`;
-      const raw = localStorage.getItem(key);
-      let deck = [];
-      if (raw) {
+      async function resolveSetId() {
+        if (!window.SetsAPI) return 'default';
+        let sets = [];
         try {
-          deck = JSON.parse(raw) || [];
-        } catch (e) {
-          deck = [];
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error('Unable to load sets', err);
         }
+        if (!sets.length) {
+          const created = await SetsAPI.createSet('Default');
+          sets = [created];
+        }
+        let active = requestedSet;
+        if (!active || !sets.some((s) => s.id === active)) {
+          active = sets[sets.length - 1].id;
+        }
+        if (active !== requestedSet) {
+          params.set('set', active);
+          const url = new URL(location.href);
+          url.search = params.toString();
+          history.replaceState({}, '', url.toString());
+        }
+        return active;
       }
-      if (!Array.isArray(deck)) deck = [];
-      return deck;
-    }
 
-    function formatText(text) {
-      if (!text) return '';
-      return String(text)
-        .replace(/&/g, '&amp;')
+      let activeSetId = await resolveSetId();
+      let deck = [];
+
+      function formatText(text) {
+        if (!text) return '';
+        return String(text)
+          .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/\r?\n/g, '<br>');
@@ -369,53 +364,105 @@
       return cell;
     }
 
-    function renderDeck(deck) {
-      cardsGrid.innerHTML = '';
-      if (!deck.length) {
-        emptyState.hidden = false;
-        cardsGrid.hidden = true;
-        cardCountEl.textContent = 'Cards';
-        return;
+      function renderDeckData(list) {
+        cardsGrid.innerHTML = '';
+        if (!list.length) {
+          emptyState.hidden = false;
+          cardsGrid.hidden = true;
+          cardCountEl.textContent = 'Cards';
+          return;
+        }
+        emptyState.hidden = true;
+        cardsGrid.hidden = false;
+        cardCountEl.textContent = `Cards (${list.length})`;
+        list.forEach((card, idx) => {
+          cardsGrid.appendChild(createCardCell(card, 'front', idx));
+          cardsGrid.appendChild(createCardCell(card, 'back', idx));
+        });
       }
-      emptyState.hidden = true;
-      cardsGrid.hidden = false;
-      cardCountEl.textContent = `Cards (${deck.length})`;
-      deck.forEach((card, idx) => {
-        cardsGrid.appendChild(createCardCell(card, 'front', idx));
-        cardsGrid.appendChild(createCardCell(card, 'back', idx));
-      });
-    }
 
-    function refreshLinks() {
-      const encoded = encodeURIComponent(activeSetId);
-      editLink.href = `editor.html?set=${encoded}`;
-      rehearseLink.href = `rehearse.html?set=${encoded}`;
-      if (window.SetsAPI) {
-        setNameEl.textContent = SetsAPI.getSetName(activeSetId);
-      } else {
-        setNameEl.textContent = activeSetId;
+      async function refreshLinks() {
+        const encoded = encodeURIComponent(activeSetId);
+        editLink.href = `editor.html?set=${encoded}`;
+        rehearseLink.href = `rehearse.html?set=${encoded}`;
+        if (window.SetsAPI) {
+          try {
+            setNameEl.textContent = await SetsAPI.getSetName(activeSetId);
+          } catch (err) {
+            console.error(err);
+            setNameEl.textContent = activeSetId;
+          }
+        } else {
+          setNameEl.textContent = activeSetId;
+        }
       }
-    }
 
-    function chooseSet() {
-      if (!window.SetsAPI) return;
-      const sets = SetsAPI.loadSets();
-      const options = sets.map(s => `${s.name} (${s.id})`).join('\n');
-      const pick = prompt('Type a set id to open:\n' + options, activeSetId);
-      if (!pick) return;
-      const trimmed = pick.trim();
-      if (!trimmed) return;
-      if (!SetsAPI.getSetById(trimmed)) {
-        alert('Set not found.');
-        return;
+      async function loadDeckForSet() {
+        if (!window.SetsAPI) {
+          const candidates = [
+            `study_deck_sync_v1__${activeSetId}`,
+            `study_deck_v2__${activeSetId}`
+          ];
+          let raw = null;
+          for (const key of candidates) {
+            const val = localStorage.getItem(key);
+            if (val != null) {
+              raw = val;
+              break;
+            }
+          }
+          try {
+            deck = raw ? JSON.parse(raw) || [] : [];
+          } catch {
+            deck = [];
+          }
+        } else {
+          try {
+            deck = await SetsAPI.loadDeck(activeSetId);
+          } catch (err) {
+            console.error('Failed to load deck', err);
+            deck = [];
+          }
+        }
+        deck = Array.isArray(deck) ? deck : [];
+        renderDeckData(deck);
       }
-      location.href = `cards.html?set=${encodeURIComponent(trimmed)}`;
-    }
 
-    changeSetBtn.addEventListener('click', chooseSet);
+      async function chooseSet() {
+        if (!window.SetsAPI) return;
+        let sets = [];
+        try {
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error(err);
+        }
+        if (!sets.length) {
+          alert('No sets available.');
+          return;
+        }
+        const options = sets.map((s) => `${s.name} (${s.id})`).join('\n');
+        const pick = prompt('Type a set id to open:\n' + options, activeSetId);
+        if (!pick) return;
+        const trimmed = pick.trim();
+        if (!trimmed) return;
+        if (!sets.some((s) => s.id === trimmed)) {
+          alert('Set not found.');
+          return;
+        }
+        activeSetId = trimmed;
+        params.set('set', activeSetId);
+        const url = new URL(location.href);
+        url.search = params.toString();
+        history.replaceState({}, '', url.toString());
+        await refreshLinks();
+        await loadDeckForSet();
+      }
 
-    refreshLinks();
-    renderDeck(loadDeck());
+      changeSetBtn.addEventListener('click', chooseSet);
+
+      await refreshLinks();
+      await loadDeckForSet();
+    })();
   </script>
 </body>
 </html>

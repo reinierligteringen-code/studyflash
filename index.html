@@ -83,9 +83,18 @@
     const openDefaultLink = document.getElementById('open-default');
     const btnNewSet = document.getElementById('btn-new-set');
 
-    function renderSets() {
-      const sets = (window.SetsAPI ? SetsAPI.loadSets() : []).sort((a,b) => a.createdAt - b.createdAt);
+    async function renderSets() {
       setsList.innerHTML = '';
+      let sets = [];
+      if (window.SetsAPI) {
+        try {
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error('Unable to load sets', err);
+        }
+      }
+      sets = Array.isArray(sets) ? [...sets].sort((a, b) => a.createdAt - b.createdAt) : [];
+
       if (!sets.length) {
         const empty = document.createElement('div');
         empty.className = 'empty';
@@ -118,13 +127,18 @@
       }
     }
 
-    btnNewSet.addEventListener('click', () => {
+    btnNewSet.addEventListener('click', async () => {
       if (!window.SetsAPI) return;
       const name = prompt('Name for the new set:', 'New Set');
       if (name === null) return;
-      const set = SetsAPI.createSet(name.trim() || 'New Set');
-      renderSets();
-      location.href = `editor.html?set=${encodeURIComponent(set.id)}`;
+      try {
+        const set = await SetsAPI.createSet(name.trim() || 'New Set');
+        await renderSets();
+        location.href = `editor.html?set=${encodeURIComponent(set.id)}`;
+      } catch (err) {
+        alert('Unable to create set right now. Please try again.');
+        console.error(err);
+      }
     });
 
     renderSets();

@@ -48,121 +48,190 @@
   </div>
 
   <script>
-    const params = new URLSearchParams(location.search);
-    let setId = params.get('set') || 'default';
-    const STORAGE_KEY = () => SetsAPI.storageKeyFor(setId);
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      let setId = params.get('set') || 'default';
 
-    const grid = document.getElementById('grid');
-    const view = document.getElementById('view');
-    const g = grid.getContext('2d');
-    const v = view.getContext('2d');
+      const grid = document.getElementById('grid');
+      const view = document.getElementById('view');
+      const g = grid.getContext('2d');
+      const v = view.getContext('2d');
 
-    const setNameEl = document.getElementById('set-name');
-    const progressEl = document.getElementById('progress');
+      const setNameEl = document.getElementById('set-name');
+      const progressEl = document.getElementById('progress');
 
-    const btnPrev = document.getElementById('btn-prev');
-    const btnNext = document.getElementById('btn-next');
-    const btnFlip = document.getElementById('btn-flip');
-    const btnShuffle = document.getElementById('btn-shuffle');
-    const btnEdit = document.getElementById('btn-edit');
-    const btnPick = document.getElementById('btn-pick-set');
+      const btnPrev = document.getElementById('btn-prev');
+      const btnNext = document.getElementById('btn-next');
+      const btnFlip = document.getElementById('btn-flip');
+      const btnShuffle = document.getElementById('btn-shuffle');
+      const btnEdit = document.getElementById('btn-edit');
+      const btnPick = document.getElementById('btn-pick-set');
 
-    let deck = [];
-    let index = 0;
-    let side = 'front';
+      let deck = [];
+      let index = 0;
+      let side = 'front';
+      let currentSetName = '(set)';
 
-    function drawGrid() {
-      const w = grid.width, h = grid.height;
-      g.clearRect(0,0,w,h);
-      g.fillStyle = '#f6f8ff'; g.fillRect(0,0,w,h);
-      const GRID = 24;
-      g.strokeStyle = 'rgba(47, 107, 255, 0.14)'; g.lineWidth = 1; g.beginPath();
-      for (let x=0; x<=w; x+=GRID) { g.moveTo(x+0.5,0); g.lineTo(x+0.5,h); }
-      for (let y=0; y<=h; y+=GRID) { g.moveTo(0,y+0.5); g.lineTo(w,y+0.5); }
-      g.stroke();
-      g.strokeStyle = 'rgba(99, 113, 135, 0.28)'; g.lineWidth = 2; g.strokeRect(8.5,8.5,w-17,h-17);
-    }
-
-    function render() {
-      v.clearRect(0,0,view.width, view.height);
-      if (!deck.length) return;
-      const card = deck[index];
-      const content = card[side];
-      // images
-      for (const img of content.images) {
-        if (!img.__image) continue;
-        const a = (typeof img.angle === 'number') ? img.angle : 0;
-        const w = img.w * (img.scale/100);
-        const h = img.h * (img.scale/100);
-        const cx = img.x + w/2, cy = img.y + h/2;
-        v.save(); v.translate(cx, cy); v.rotate(a * Math.PI/180);
-        v.drawImage(img.__image, -w/2, -h/2, w, h); v.restore();
-      }
-      // strokes
-      for (const s of content.strokes) {
-        v.save();
-        v.lineJoin = 'round'; v.lineCap = 'round';
-        v.globalCompositeOperation = s.mode || 'source-over';
-        v.strokeStyle = s.color || '#e7e9ee';
-        v.lineWidth = s.size || 2;
-        v.beginPath();
-        for (let i=0;i<s.points.length;i++) {
-          const p = s.points[i];
-          if (i===0) v.moveTo(p.x, p.y); else v.lineTo(p.x, p.y);
+      async function ensureSet() {
+        if (!window.SetsAPI) return;
+        let sets = [];
+        try {
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error(err);
         }
-        v.stroke();
-        v.restore();
+        if (!sets.length) {
+          const created = await SetsAPI.createSet('Default');
+          sets = [created];
+        }
+        if (!sets.some((s) => s.id === setId)) {
+          setId = sets[sets.length - 1].id;
+          params.set('set', setId);
+          const url = new URL(location.href);
+          url.search = params.toString();
+          history.replaceState({}, '', url.toString());
+        }
       }
-      progressEl.textContent = `${index+1} / ${deck.length} — ${side}`;
-      setNameEl.textContent = SetsAPI.getSetName(setId);
-    }
 
-    function attachImages() {
-      for (const card of deck) {
-        for (const sideName of ['front','back']) {
-          for (const im of card[sideName].images) {
-            const img = new Image();
-            img.onload = () => { im.__image = img; render(); };
-            img.src = im.src;
+      function drawGrid() {
+        const w = grid.width, h = grid.height;
+        g.clearRect(0,0,w,h);
+        g.fillStyle = '#f6f8ff'; g.fillRect(0,0,w,h);
+        const GRID = 24;
+        g.strokeStyle = 'rgba(47, 107, 255, 0.14)'; g.lineWidth = 1; g.beginPath();
+        for (let x=0; x<=w; x+=GRID) { g.moveTo(x+0.5,0); g.lineTo(x+0.5,h); }
+        for (let y=0; y<=h; y+=GRID) { g.moveTo(0,y+0.5); g.lineTo(w,y+0.5); }
+        g.stroke();
+        g.strokeStyle = 'rgba(99, 113, 135, 0.28)'; g.lineWidth = 2; g.strokeRect(8.5,8.5,w-17,h-17);
+      }
+
+      async function updateSetName() {
+        if (!window.SetsAPI) {
+          currentSetName = setId;
+        } else {
+          try {
+            currentSetName = await SetsAPI.getSetName(setId);
+          } catch (err) {
+            console.error(err);
+            currentSetName = setId;
+          }
+        }
+        setNameEl.textContent = currentSetName;
+      }
+
+      function render() {
+        v.clearRect(0,0,view.width, view.height);
+        if (!deck.length) return;
+        const card = deck[index];
+        const content = card[side];
+        for (const img of content.images) {
+          if (!img.__image) continue;
+          const a = (typeof img.angle === 'number') ? img.angle : 0;
+          const w = img.w * (img.scale/100);
+          const h = img.h * (img.scale/100);
+          const cx = img.x + w/2, cy = img.y + h/2;
+          v.save(); v.translate(cx, cy); v.rotate(a * Math.PI/180);
+          v.drawImage(img.__image, -w/2, -h/2, w, h); v.restore();
+        }
+        for (const s of content.strokes) {
+          v.save();
+          v.lineJoin = 'round'; v.lineCap = 'round';
+          v.globalCompositeOperation = s.mode || 'source-over';
+          v.strokeStyle = s.color || '#e7e9ee';
+          v.lineWidth = s.size || 2;
+          v.beginPath();
+          for (let i=0;i<s.points.length;i++) {
+            const p = s.points[i];
+            if (i===0) v.moveTo(p.x, p.y); else v.lineTo(p.x, p.y);
+          }
+          v.stroke();
+          v.restore();
+        }
+        progressEl.textContent = `${index+1} / ${deck.length} — ${side}`;
+      }
+
+      function attachImages() {
+        for (const card of deck) {
+          for (const sideName of ['front','back']) {
+            for (const im of card[sideName].images) {
+              const img = new Image();
+              img.onload = () => { im.__image = img; render(); };
+              img.src = im.src;
+            }
           }
         }
       }
-    }
 
-    function loadDeck() {
-      const raw = localStorage.getItem(STORAGE_KEY());
-      deck = [];
-      if (raw) {
-        try { deck = JSON.parse(raw) || []; } catch(e) { deck = []; }
+      async function loadDeck() {
+        if (window.SetsAPI) {
+          try {
+            deck = await SetsAPI.loadDeck(setId);
+          } catch (err) {
+            console.error('Unable to load deck', err);
+            deck = [];
+          }
+        } else {
+          const candidates = [
+            `study_deck_sync_v1__${setId}`,
+            `study_deck_v2__${setId}`
+          ];
+          let raw = null;
+          for (const key of candidates) {
+            const val = localStorage.getItem(key);
+            if (val != null) {
+              raw = val;
+              break;
+            }
+          }
+          try { deck = raw ? JSON.parse(raw) || [] : []; } catch (e) { deck = []; }
+        }
+        if (!Array.isArray(deck) || deck.length === 0) {
+          deck = [{ front:{strokes:[],images:[]}, back:{strokes:[],images:[]}, createdAt: Date.now() }];
+        }
+        index = 0;
+        side = 'front';
+        attachImages();
+        render();
+        await updateSetName();
       }
-      if (!Array.isArray(deck) || deck.length === 0) {
-        deck = [{ front:{strokes:[],images:[]}, back:{strokes:[],images:[]}, createdAt: Date.now() }];
-        localStorage.setItem(STORAGE_KEY(), JSON.stringify(deck));
-      }
-      index = 0; side = 'front';
-      attachImages();
-      render();
-    }
 
-    btnPrev.onclick = () => { if (index>0) { index--; side='front'; render(); } };
-    btnNext.onclick = () => { if (index<deck.length-1) { index++; side='front'; render(); } };
-    btnFlip.onclick = () => { side = (side==='front'?'back':'front'); render(); };
-    btnShuffle.onclick = () => {
-      deck.sort(() => Math.random() - 0.5); index = 0; side='front'; render();
-    };
-    btnEdit.onclick = () => { location.href = `editor.html?set=${setId}`; };
-    btnPick.onclick = () => {
-      const sets = SetsAPI.loadSets();
-      const names = sets.map(s=>`${s.name} (${s.id})`).join('\n');
-      const pick = prompt('Type a set id to open:\n' + names, setId);
-      if (!pick) return;
-      setId = pick.trim();
-      loadDeck();
-      history.replaceState({}, '', `rehearse.html?set=${setId}`);
-    };
+      btnPrev.onclick = () => { if (index>0) { index--; side='front'; render(); } };
+      btnNext.onclick = () => { if (index<deck.length-1) { index++; side='front'; render(); } };
+      btnFlip.onclick = () => { side = (side==='front'?'back':'front'); render(); };
+      btnShuffle.onclick = () => {
+        deck = [...deck].sort(() => Math.random() - 0.5);
+        index = 0; side='front'; render();
+      };
+      btnEdit.onclick = () => { location.href = `editor.html?set=${encodeURIComponent(setId)}`; };
+      btnPick.onclick = async () => {
+        if (!window.SetsAPI) return;
+        let sets = [];
+        try {
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error(err);
+        }
+        if (!sets.length) {
+          alert('No sets available.');
+          return;
+        }
+        const names = sets.map(s=>`${s.name} (${s.id})`).join('\n');
+        const pick = prompt('Type a set id to open:\n' + names, setId);
+        if (!pick) return;
+        const trimmed = pick.trim();
+        if (!sets.some((s) => s.id === trimmed)) {
+          alert('Set not found.');
+          return;
+        }
+        setId = trimmed;
+        history.replaceState({}, '', `rehearse.html?set=${encodeURIComponent(setId)}`);
+        await loadDeck();
+      };
 
-    drawGrid();
-    loadDeck();
+      await ensureSet();
+      drawGrid();
+      await loadDeck();
+    })();
   </script>
 </body>
 </html>
