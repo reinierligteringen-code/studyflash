@@ -549,7 +549,8 @@
       ctx.globalCompositeOperation = stroke.mode || 'source-over';
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.strokeStyle = stroke.mode === 'destination-out' ? 'rgba(0,0,0,1)' : '#111827';
+      const strokeColor = stroke.color || (stroke.mode === 'destination-out' ? 'rgba(0,0,0,1)' : '#111827');
+      ctx.strokeStyle = strokeColor;
       ctx.lineWidth = stroke.size || 2.4;
       if (stroke.points.length === 1) {
         const p = stroke.points[0];
@@ -605,6 +606,7 @@
       this.currentStrokeData = {
         mode,
         size: width,
+        color,
         points: []
       };
       this.callbacks.onStrokeStart(this.side);
