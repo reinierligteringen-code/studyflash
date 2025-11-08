@@ -267,6 +267,42 @@ def api_put_draw_deck(set_id: str, payload: dict = Body(...)):
     finally:
         con.close()
 
+
+@app.post("/api/draw/sync")
+def api_sync_draw_sets(payload: dict = Body(...)):
+    sets_payload = payload.get("sets")
+    if not isinstance(sets_payload, list):
+        raise HTTPException(status_code=400, detail="Sets payload required")
+    con = connect()
+    try:
+        ensure_default_draw(con)
+        synced = []
+        for item in sets_payload:
+            if not isinstance(item, dict):
+                continue
+            set_id = item.get("id")
+            if not isinstance(set_id, str) or not set_id.strip():
+                continue
+            name = (item.get("name") or "New Set").strip() or "New Set"
+            deck = item.get("deck") if isinstance(item.get("deck"), list) else []
+            ensure_draw_set(con, set_id, name, with_default=not deck)
+            if deck:
+                save_draw_deck(con, set_id, deck)
+            with con:
+                con.execute(
+                    "UPDATE draw_sets SET name=?, updated_at=DATETIME('now') WHERE id=?",
+                    (name, set_id),
+                )
+            row = con.execute(
+                "SELECT id, name, created_at, updated_at FROM draw_sets WHERE id=?",
+                (set_id,),
+            ).fetchone()
+            if row:
+                synced.append(draw_set_row_to_dict(row))
+        return {"sets": synced}
+    finally:
+        con.close()
+
 def deck_list(con):
     return [r["name"] for r in con.execute("SELECT name FROM decks ORDER BY name")]
 

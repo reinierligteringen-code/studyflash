@@ -17,6 +17,120 @@
     return { front: defaultSide(), back: defaultSide(), createdAt: nowTs() };
   }
 
+  function apiBase() {
+    if (typeof window !== 'undefined') {
+      const override = (window.STUDY_API_BASE || (window.localStorage && window.localStorage.getItem && window.localStorage.getItem('study_api_base')));
+      if (typeof override === 'string' && override.trim()) {
+        return override.replace(/\/$/, '');
+      }
+      try {
+        const deck = JSON.parse(raw) || [];
+        if (!Array.isArray(deck) || !deck.length) {
+          return [defaultCard()];
+        }
+        return deck;
+      } catch (err) {
+        return [defaultCard()];
+      }
+    },
+    saveDeck(id, deck) {
+      localStorage.setItem(this.storageKeyFor(id), JSON.stringify(deck));
+    }
+  };
+
+  let setsCache = Local.loadSets();
+  let pendingCache = loadPending();
+  let flushActive = false;
+
+  function loadPending() {
+    const raw = localStorage.getItem(LOCAL_PENDING_KEY);
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (err) {
+      console.warn('Unable to parse pending sync cache', err);
+      return {};
+    }
+  }
+
+  function savePending() {
+    try {
+      localStorage.setItem(LOCAL_PENDING_KEY, JSON.stringify(pendingCache));
+    } catch (err) {
+      console.warn('Unable to persist pending sync cache', err);
+    }
+  }
+
+  function ensurePendingEntry(id) {
+    if (!pendingCache[id]) {
+      pendingCache[id] = { id, updatedAt: nowTs() };
+    }
+    return pendingCache[id];
+  }
+
+  function clearPendingField(id, field) {
+    const entry = pendingCache[id];
+    if (!entry) return;
+    delete entry[field];
+    if (!entry.name && !entry.deck) {
+      delete pendingCache[id];
+    } else {
+      entry.updatedAt = nowTs();
+    }
+    savePending();
+  }
+
+  async function flushPending() {
+    if (flushActive) return;
+    if (!Object.keys(pendingCache).length) return;
+    if (typeof fetch !== 'function') return;
+    flushActive = true;
+    try {
+      const entries = Object.values(pendingCache).sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+      for (const entry of entries) {
+        const { id, name, deck } = entry;
+        const encodedId = encodeURIComponent(id);
+        try {
+          if (deck) {
+            await request(`/sets/${encodedId}/deck`, { method: 'PUT', body: { deck, name } });
+            clearPendingField(id, 'deck');
+          }
+          if (name) {
+            await request(`/sets/${encodedId}`, { method: 'PUT', body: { name } });
+            clearPendingField(id, 'name');
+          }
+        } catch (err) {
+          console.warn('Pending sync failed', id, err);
+          if (err && err.status === 404 && deck) {
+            try {
+              await request('/sets', { method: 'POST', body: { id, name: name || 'New Set', deck } });
+              clearPendingField(id, 'deck');
+              clearPendingField(id, 'name');
+            } catch (createErr) {
+              console.warn('Pending create failed', id, createErr);
+            }
+          }
+        }
+      }
+    } finally {
+      flushActive = false;
+      savePending();
+    }
+  }
+
+  function queuePendingDeck(id, deck, name) {
+    const entry = ensurePendingEntry(id);
+    entry.deck = deck;
+    if (name) entry.name = name;
+    entry.updatedAt = nowTs();
+    savePending();
+    if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+      flushPending();
+    }
+    return API_BASE;
+  }
+
   function ensureArray(value, fallback) {
     return Array.isArray(value) ? value : fallback;
   }
@@ -212,8 +326,61 @@
     }
   }
 
+  function collectPendingEntries() {
+    const ids = Object.keys(pendingCache);
+    if (!ids.length) return [];
+    const entries = [];
+    for (const id of ids) {
+      const entry = pendingCache[id] || {};
+      const localSet = Local.getSetById(id);
+      const name = entry.name || (localSet && localSet.name) || 'New Set';
+      let deck = entry.deck;
+      if (!deck) {
+        try {
+          deck = Local.loadDeck(id);
+        } catch (err) {
+          deck = null;
+        }
+      }
+      if (!Array.isArray(deck) || !deck.length) {
+        deck = null;
+      }
+      entries.push({ id, name, deck });
+    }
+    return entries;
+  }
+
+  function beaconSyncPending() {
+    if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') {
+      return false;
+    }
+    const entries = collectPendingEntries().filter((item) => item.deck || item.name);
+    if (!entries.length) {
+      return false;
+    }
+    try {
+      const payload = JSON.stringify({ sets: entries });
+      const blob = new Blob([payload], { type: 'application/json' });
+      const base = apiBase();
+      return navigator.sendBeacon(`${base}/sync`, blob);
+    } catch (err) {
+      console.warn('sendBeacon sync failed', err);
+      return false;
+    }
+  }
+
+  function handleLifecycleFlush() {
+    if (!Object.keys(pendingCache).length) return;
+    const sent = beaconSyncPending();
+    if (!sent) {
+      flushPending();
+    }
+  }
+
   if (typeof window !== 'undefined') {
     window.addEventListener('online', () => flushPending());
+    window.addEventListener('pagehide', handleLifecycleFlush, { capture: true });
+    window.addEventListener('beforeunload', handleLifecycleFlush, { capture: true });
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
@@ -238,7 +405,8 @@
       init.method = init.method || 'POST';
       init.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
-    const res = await fetch(`${API_BASE}${path}`, init);
+    const base = apiBase();
+    const res = await fetch(`${base}${path}`, init);
     const text = await res.text();
     const data = text ? (() => { try { return JSON.parse(text); } catch { return null; } })() : null;
     if (!res.ok) {
