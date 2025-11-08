@@ -9,10 +9,10 @@
   <style>
     .wrap { max-width: 1100px; margin: 16px auto; padding: 0 16px; }
     .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin: 12px 0; }
-    .btn { background:#1a2030; color:var(--text); border:1px solid var(--border); padding:10px 12px; border-radius:10px; text-decoration:none; }
-    .btn:hover { transform: translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,0.25); }
+    .btn { padding:10px 12px; border-radius:10px; text-decoration:none; }
+    .btn:hover { transform: translateY(-1px); box-shadow:var(--shadow-sm); }
     .muted { color: var(--muted); }
-    .canvas-wrap { position:relative; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:#0b0f15; margin-top:10px; }
+    .canvas-wrap { position:relative; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:var(--card); box-shadow:var(--shadow-lg); margin-top:10px; }
     canvas { display:block; width:100%; height:auto; }
     #grid { position:absolute; inset:0; }
     #view { position:absolute; inset:0; }
@@ -74,13 +74,13 @@
     function drawGrid() {
       const w = grid.width, h = grid.height;
       g.clearRect(0,0,w,h);
-      g.fillStyle = '#0b0f15'; g.fillRect(0,0,w,h);
+      g.fillStyle = '#f6f8ff'; g.fillRect(0,0,w,h);
       const GRID = 24;
-      g.strokeStyle = 'rgba(122,162,247,0.12)'; g.lineWidth = 1; g.beginPath();
+      g.strokeStyle = 'rgba(47, 107, 255, 0.14)'; g.lineWidth = 1; g.beginPath();
       for (let x=0; x<=w; x+=GRID) { g.moveTo(x+0.5,0); g.lineTo(x+0.5,h); }
       for (let y=0; y<=h; y+=GRID) { g.moveTo(0,y+0.5); g.lineTo(w,y+0.5); }
       g.stroke();
-      g.strokeStyle = 'rgba(160,170,190,0.35)'; g.lineWidth = 2; g.strokeRect(8.5,8.5,w-17,h-17);
+      g.strokeStyle = 'rgba(99, 113, 135, 0.28)'; g.lineWidth = 2; g.strokeRect(8.5,8.5,w-17,h-17);
     }
 
     function render() {

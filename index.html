@@ -20,25 +20,25 @@
       border:1px solid var(--border);
       border-radius:14px;
       padding:18px 20px;
-      background:#121722;
+      background:var(--surface);
       text-decoration:none;
       color:var(--text);
-      box-shadow:0 10px 26px rgba(0,0,0,0.3);
+      box-shadow:var(--shadow-sm);
       transition: transform 140ms ease, box-shadow 140ms ease;
     }
     .card-link span { color: var(--muted); font-size: 13px; }
-    .card-link:hover { transform: translateY(-2px); box-shadow:0 14px 34px rgba(0,0,0,0.45); }
+    .card-link:hover { transform: translateY(-2px); box-shadow:var(--shadow-md); }
     .recent-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
     .recent-header h2 { margin:0; font-size:20px; }
-    .btn { background:#1a2030; color:var(--text); border:1px solid var(--border); padding:9px 12px; border-radius:10px; text-decoration:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
-    .btn:hover { transform: translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,0.25); }
+    .btn { padding:9px 12px; border-radius:10px; text-decoration:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+    .btn:hover { transform: translateY(-1px); box-shadow:var(--shadow-sm); }
     .actions-inline { display:flex; gap:8px; flex-wrap:wrap; }
     .sets-list { display:grid; gap:12px; }
-    .set-card { border:1px solid var(--border); border-radius:14px; padding:14px 16px; background:#101622; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; }
+    .set-card { border:1px solid var(--border); border-radius:14px; padding:14px 16px; background:var(--surface); box-shadow:var(--shadow-sm); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; }
     .set-info { display:flex; flex-direction:column; gap:4px; }
     .set-info .muted { font-size:12px; }
     .set-actions { display:flex; gap:8px; flex-wrap:wrap; }
-    .empty { border:1px dashed var(--border); padding:18px; border-radius:14px; color:var(--muted); text-align:center; }
+    .empty { border:1px dashed var(--border); padding:18px; border-radius:14px; color:var(--muted); background:rgba(255,255,255,0.8); text-align:center; }
   </style>
 </head>
 <body>
