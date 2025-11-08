@@ -4,138 +4,359 @@
   <meta charset="utf-8" />
   <title>Study Cards — Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <script>
-    window.MathJax = {
-      tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']]},
-      svg:{fontCache:'global'}
-    };
-  </script>
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <script src="sets.js"></script>
   <style>
-    :root{
-      --brand:#0a84ff; --ink:#111; --ink-2:#555;
-      --bg:#f6f7fb; --panel:#ffffff; --line:#e7e7ee;
-      --accent:#0a84ff; --warn:#ef4444;
-      --toolbar-h:56px; --sidebar-w:420px;
-      --grid-bg:#e9f1ff;
+    body {
+      color: var(--text);
+      font: 14px/1.5 "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    .header{position:sticky;top:0;z-index:100;height:56px;display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
-    .header a.back{text-decoration:none;color:var(--ink-2);padding:6px 10px;border:1px solid var(--line);border-radius:10px}
-    .header .title{font-weight:600}
-    .wrap{height:calc(100vh - 56px);display:grid;grid-template-columns:var(--sidebar-w) 1fr}
-    @media (max-width:980px){.wrap{grid-template-columns:1fr;height:auto}.canvasPane{height:70vh}}
-    .sidebar{overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:16px 16px 100px}
-    .section{margin-bottom:18px}
-    .section h3{margin:0 0 10px;font-size:15px}
-    label{display:block;font-size:12px;color:var(--ink-2);margin:10px 0 6px}
-    input[type=text],textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;color:var(--ink);resize:vertical}
-    textarea{min-height:84px}
-    .preview{border:1px dashed var(--line);background:#fff;border-radius:12px;padding:12px;min-height:72px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .muted{color:var(--ink-2);font-size:12px}
-    button{border:1px solid var(--line);background:#fff;padding:9px 12px;border-radius:12px;cursor:pointer;user-select:none}
-    button.primary{border-color:var(--accent);background:var(--accent);color:#fff}
-    button.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(10,132,255,.15)}
-    button:disabled{opacity:.6;cursor:not-allowed}
-    .tag{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12px;margin-right:6px;margin-top:6px}
-    .canvasPane{position:relative;background:#fff;height:100%}
-    .toolbar{height:var(--toolbar-h);display:flex;gap:10px;align-items:center;padding:10px 12px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
-    .toolbar .group{display:flex;gap:6px;align-items:center}
-    input[type=range]{width:140px}
-    .spacer{flex:1}
-    .pad{position:relative;width:100%;height:calc(100% - var(--toolbar-h));touch-action:none;overscroll-behavior:contain;background:var(--grid-bg)}
-    canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-    /* Disable selection/highlight only while drawing */
-    body.drawing, body.drawing *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-    /* Nicer grid contrast on blue bg */
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 18px;
+      margin-bottom: 26px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .title-block h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0.4px;
+    }
+    .title-block .muted {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .layout {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+      align-items: start;
+    }
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .panel,
+    .canvas-pane {
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 18px;
+      box-shadow: var(--shadow-lg);
+    }
+    .panel {
+      padding: 26px 24px 30px;
+    }
+    .section {
+      margin-bottom: 26px;
+    }
+    .section:last-child {
+      margin-bottom: 0;
+    }
+    .section h3 {
+      margin: 0 0 14px;
+      font-size: 15px;
+      letter-spacing: 0.3px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    input[type=text],
+    textarea {
+      background: var(--card);
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+    textarea {
+      min-height: 108px;
+    }
+    .preview {
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      min-height: 88px;
+      background: rgba(236, 241, 252, 0.9);
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.85);
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.03em;
+    }
+    .tag input {
+      accent-color: var(--accent);
+    }
+    .canvas-pane {
+      display: flex;
+      flex-direction: column;
+      min-height: 560px;
+      position: relative;
+      overflow: hidden;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: rgba(248, 250, 255, 0.95);
+      border-bottom: 1px solid var(--border-strong);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .toolbar::-webkit-scrollbar {
+      height: 6px;
+    }
+    .toolbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .toolbar::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+    .toolbar button,
+    .toolbar .control {
+      flex: 0 0 auto;
+    }
+    .toolbar button {
+      border-radius: 12px;
+    }
+    .toolbar .control {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(241, 245, 255, 0.95);
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .toolbar .control .control-label {
+      letter-spacing: 0.03em;
+    }
+    .toolbar .control output {
+      min-width: 60px;
+      text-align: left;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .toolbar .control input[type=range] {
+      width: 160px;
+      min-width: 160px;
+      background: transparent;
+    }
+    .toolbar .control select {
+      width: auto;
+      min-width: 92px;
+      padding: 0.35rem 2.2rem 0.35rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.95);
+    }
+    .pad {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      touch-action: none;
+      overscroll-behavior: contain;
+      background: radial-gradient(circle at 40% 30%, rgba(47, 107, 255, 0.12), transparent 55%), var(--card);
+    }
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #gridCanvas {
+      pointer-events: none;
+    }
+    #previewCanvas {
+      pointer-events: none;
+    }
+    #drawCanvas {
+      touch-action: none;
+    }
+    body.drawing,
+    body.drawing * {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .actions-row {
+      gap: 12px;
+    }
+    .actions-row button {
+      border-radius: 12px;
+    }
   </style>
 </head>
 <body>
-  <div class="header">
-    <a class="back" href="./index.html">← Home</a>
-    <div class="title">Edit Flashcard</div>
-    <div class="spacer"></div>
-    <div class="muted">LaTeX supported: <code>$...$</code> or <code>$$...$$</code></div>
-  </div>
-
   <div class="wrap">
-    <aside class="sidebar">
-      <div class="section">
-        <label for="title">Title</label>
-        <input id="title" type="text" placeholder="e.g. Week 2 — MRS and Budget Line">
+    <div class="topbar">
+      <div class="nav-links">
+        <a class="btn" href="index.html">← Home</a>
+        <a class="btn" href="manage.html">Sets</a>
+        <a class="btn" id="link-rehearse" href="rehearse.html">Rehearse</a>
       </div>
-
-      <div class="section">
-        <h3>Front (Question)</h3>
-        <label for="frontInput">Text (LaTeX allowed)</label>
-        <textarea id="frontInput" placeholder="Type the question… e.g. Show that $MRS=\\frac{p_x}{p_y}$ at an interior optimum."></textarea>
-        <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
-        <div id="frontPreview" class="preview"></div>
+      <div class="title-block">
+        <h1>Edit Flashcards</h1>
+        <div class="muted">Current set: <span id="set-name">Default</span></div>
       </div>
+    </div>
 
-      <div class="section">
-        <h3>Back (Answer)</h3>
-        <label for="backInput">Text (LaTeX allowed)</label>
-        <textarea id="backInput" placeholder="Sketch the steps and result… e.g. $$MRS=\\frac{MU_x}{MU_y}=\\frac{p_x}{p_y}$$"></textarea>
-        <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
-        <div id="backPreview" class="preview"></div>
-      </div>
-
-      <div class="section">
-        <h3>Attach drawing to…</h3>
-        <div class="row">
-          <label class="tag"><input type="radio" name="attachTo" value="front" checked> Front</label>
-          <label class="tag"><input type="radio" name="attachTo" value="back"> Back</label>
-          <button id="snapshotBtn">Insert canvas snapshot</button>
-          <button id="clearImgsBtn">Remove all images</button>
+    <div class="layout">
+      <aside class="panel">
+        <div class="section">
+          <label for="title">Title</label>
+          <input id="title" type="text" placeholder="e.g. Week 2 — MRS and Budget Line">
         </div>
-        <div class="muted" style="margin-top:6px">Use the canvas to the right; click “Insert canvas snapshot” to embed it.</div>
-      </div>
 
-      <div class="section row">
-        <button id="saveBtn" class="primary">Save card (JSON)</button>
-        <button id="downloadPNG">Download preview as PNG</button>
-        <button id="clearTextBtn" style="color:var(--warn);border-color:var(--warn)">Clear text</button>
-      </div>
-    </aside>
+        <div class="section">
+          <h3>Front (Question)</h3>
+          <label for="frontInput">Text</label>
+          <textarea id="frontInput" placeholder="Type the question… e.g. Explain why the marginal rate of substitution equals the price ratio at an interior optimum."></textarea>
+          <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
+          <div id="frontPreview" class="preview"></div>
+        </div>
 
-    <section class="canvasPane">
-      <div class="toolbar">
-        <div class="group">
-          <button id="penBtn" class="active" title="Pen (P)">Pen</button>
-          <button id="eraserBtn" title="Eraser (E)">Eraser</button>
+        <div class="section">
+          <h3>Back (Answer)</h3>
+          <label for="backInput">Text</label>
+          <textarea id="backInput" placeholder="Sketch the steps and result… e.g. Compare marginal utilities and prices to show the trade-off."></textarea>
+          <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
+          <div id="backPreview" class="preview"></div>
         </div>
-        <div class="group">
-          <label for="size">Size</label>
-          <input id="size" type="range" min="0.5" max="6" step="0.1" value="1.3">
-          <span id="sizeVal">1.3</span> px
+
+        <div class="section">
+          <h3>Attach drawing to…</h3>
+          <div class="row">
+            <label class="tag"><input type="radio" name="attachTo" value="front" checked> Front</label>
+            <label class="tag"><input type="radio" name="attachTo" value="back"> Back</label>
+            <button id="snapshotBtn">Insert canvas snapshot</button>
+            <button id="clearImgsBtn">Remove all images</button>
+          </div>
+          <div class="muted" style="margin-top:6px">Use the canvas to the right; click “Insert canvas snapshot” to embed it.</div>
         </div>
-        <div class="group">
-          <label for="grid">Grid</label>
-          <input id="grid" type="range" min="10" max="40" step="2" value="24">
-          <span id="gridVal">24</span> px
-          <button id="toggleGrid">Toggle grid</button>
+
+        <div class="section row actions-row">
+          <button id="saveBtn" class="primary">Save card (JSON)</button>
+          <button id="downloadPNG">Download preview as PNG</button>
+          <button id="clearTextBtn" class="warn">Clear text</button>
         </div>
-        <div class="group">
+      </aside>
+
+      <section class="canvas-pane">
+        <div class="toolbar" role="toolbar" aria-label="Drawing tools">
+          <button id="penBtn" class="active" title="Pen (P)" aria-pressed="true">Pen</button>
+          <button id="eraserBtn" title="Eraser (E)" aria-pressed="false">Eraser</button>
+          <div class="control" id="sizeControl">
+            <span class="control-label">Size</span>
+            <input id="size" type="range" min="0.5" max="4" step="0.1" value="1.3" aria-label="Pen size">
+            <output id="sizeVal" for="size">1.3 px</output>
+          </div>
+          <button id="smoothBtn" class="active" aria-pressed="true">Smooth</button>
+          <div class="control" id="stabilizeControl">
+            <span class="control-label">Stabilize</span>
+            <input id="stabilize" type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Stroke stabilization">
+            <output id="stabilizeVal" for="stabilize">0.50</output>
+          </div>
           <button id="undoBtn" title="Undo (Ctrl/Cmd+Z)">Undo</button>
           <button id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
           <button id="clearBtn">Clear</button>
           <button id="exportCanvasBtn">Export PNG</button>
+          <button id="toggleGrid" aria-pressed="true">Grid On</button>
+          <div class="control">
+            <span class="control-label">Grid Size</span>
+            <select id="gridSize" aria-label="Grid size">
+              <option value="16">16 px</option>
+              <option value="20">20 px</option>
+              <option value="24" selected>24 px</option>
+              <option value="32">32 px</option>
+            </select>
+          </div>
         </div>
-        <div class="spacer"></div>
-      </div>
 
-      <div class="pad" id="pad">
-        <canvas id="gridCanvas"></canvas>
-        <canvas id="drawCanvas"></canvas>
-      </div>
-    </section>
+        <div class="pad" id="pad">
+          <canvas id="gridCanvas"></canvas>
+          <canvas id="previewCanvas"></canvas>
+          <canvas id="drawCanvas"></canvas>
+        </div>
+      </section>
+    </div>
   </div>
 
   <script>
-    // ===== Left: LaTeX previews =====
+    const params = new URLSearchParams(location.search);
+    const requestedSet = params.get('set');
+    let activeSetId = requestedSet || 'default';
+    const setNameLabel = document.getElementById('set-name');
+    const rehearseLink = document.getElementById('link-rehearse');
+
+    if (window.SetsAPI) {
+      const sets = SetsAPI.loadSets();
+      if (!requestedSet) {
+        activeSetId = sets[sets.length - 1]?.id || 'default';
+      } else if (!SetsAPI.getSetById(requestedSet)) {
+        activeSetId = sets[sets.length - 1]?.id || 'default';
+      }
+      if (activeSetId !== requestedSet) {
+        params.set('set', activeSetId);
+        const url = new URL(location.href);
+        url.search = params.toString();
+        history.replaceState({}, '', url.toString());
+      }
+      setNameLabel.textContent = SetsAPI.getSetName(activeSetId);
+      if (rehearseLink) {
+        rehearseLink.href = `rehearse.html?set=${encodeURIComponent(activeSetId)}`;
+      }
+    } else {
+      setNameLabel.textContent = activeSetId;
+    }
+
+    // ===== Left: Text previews =====
     const frontInput = document.getElementById('frontInput');
     const backInput  = document.getElementById('backInput');
     const frontPreview = document.getElementById('frontPreview');
@@ -145,7 +366,6 @@
     function renderPreview(el, text){
       const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       el.innerHTML = safe.replace(/\n/g,'<br/>');
-      if (window.MathJax?.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{});
     }
     function refresh(){ renderPreview(frontPreview, frontInput.value); renderPreview(backPreview, backInput.value); }
     frontInput.addEventListener('input', refresh);
@@ -183,193 +403,610 @@
     // ===== Right: Canvas with palm rejection & smooth ink =====
     const pad = document.getElementById('pad');
     const gridCanvas = document.getElementById('gridCanvas');
+    const previewCanvas = document.getElementById('previewCanvas');
     const drawCanvas = document.getElementById('drawCanvas');
     const gtx = gridCanvas.getContext('2d', {desynchronized:true});
     const ctx = drawCanvas.getContext('2d', {desynchronized:true});
+    const ptx = previewCanvas.getContext('2d', {desynchronized:true});
 
-    const penBtn=document.getElementById('penBtn');
-    const eraserBtn=document.getElementById('eraserBtn');
-    const sizeInputR=document.getElementById('size');
-    const sizeVal=document.getElementById('sizeVal');
-    const gridInput=document.getElementById('grid');
-    const gridVal=document.getElementById('gridVal');
-    const toggleGridBtn=document.getElementById('toggleGrid');
-    const undoBtn=document.getElementById('undoBtn');
-    const redoBtn=document.getElementById('redoBtn');
-    const clearBtn=document.getElementById('clearBtn');
-    const exportCanvasBtn=document.getElementById('exportCanvasBtn');
+    const penBtn = document.getElementById('penBtn');
+    const eraserBtn = document.getElementById('eraserBtn');
+    const sizeInput = document.getElementById('size');
+    const sizeVal = document.getElementById('sizeVal');
+    const gridToggleBtn = document.getElementById('toggleGrid');
+    const gridSizeSelect = document.getElementById('gridSize');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const exportCanvasBtn = document.getElementById('exportCanvasBtn');
+    const smoothBtn = document.getElementById('smoothBtn');
+    const stabilizeInput = document.getElementById('stabilize');
+    const stabilizeVal = document.getElementById('stabilizeVal');
 
-    let dpr = Math.max(1, window.devicePixelRatio||1);
-    let mode='pen', gridVisible=true;
+    let dpr = Math.max(1, window.devicePixelRatio || 1);
+    let mode = 'pen';
+    let gridVisible = true;
+    let smoothingEnabled = true;
+    let stabilizeLevel = Number(stabilizeInput.value || 0.5);
+    let canvasBounds = drawCanvas.getBoundingClientRect();
 
-    // Use canvas snapshots for history (fast)
-    let undoStack=[], redoStack=[];
+    const INK_COLOR = 'rgba(12,18,28,1)';
 
-    function setCanvasSize(){
-      const r=pad.getBoundingClientRect();
-      dpr=Math.max(1, window.devicePixelRatio||1);
-      [gridCanvas,drawCanvas].forEach(c=>{
-        c.style.width=r.width+'px'; c.style.height=r.height+'px';
-        c.width=Math.round(r.width*dpr); c.height=Math.round(r.height*dpr);
+    const gridStroke = (() => {
+      const rootStyle = getComputedStyle(document.documentElement);
+      const muted = (rootStyle.getPropertyValue('--muted') || '#9fa9c6').trim();
+      const hex = muted.replace('#', '');
+      const parseHex = (h) => {
+        if (h.length === 3) {
+          return {
+            r: parseInt(h[0] + h[0], 16),
+            g: parseInt(h[1] + h[1], 16),
+            b: parseInt(h[2] + h[2], 16)
+          };
+        }
+        if (h.length === 6) {
+          return {
+            r: parseInt(h.slice(0, 2), 16),
+            g: parseInt(h.slice(2, 4), 16),
+            b: parseInt(h.slice(4, 6), 16)
+          };
+        }
+        return null;
+      };
+      const rgb = muted.startsWith('#') ? parseHex(hex) : null;
+      if (rgb) {
+        return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`;
+      }
+      const probe = document.createElement('span');
+      probe.style.color = muted;
+      document.body.appendChild(probe);
+      const computed = getComputedStyle(probe).color;
+      probe.remove();
+      const match = computed.match(/\d+/g);
+      if (match && match.length >= 3) {
+        return `rgba(${match[0]}, ${match[1]}, ${match[2]}, 0.2)`;
+      }
+      return 'rgba(159, 169, 198, 0.2)';
+    })();
+
+    class LowPassFilter {
+      constructor(alpha) {
+        this.alpha = alpha;
+        this.initialized = false;
+        this.last = 0;
+      }
+      setAlpha(alpha) { this.alpha = alpha; }
+      filter(value) {
+        if (!this.initialized) {
+          this.initialized = true;
+          this.last = value;
+          return value;
+        }
+        const result = this.alpha * value + (1 - this.alpha) * this.last;
+        this.last = result;
+        return result;
+      }
+      clone() {
+        const copy = new LowPassFilter(this.alpha);
+        copy.initialized = this.initialized;
+        copy.last = this.last;
+        return copy;
+      }
+    }
+
+    class OneEuroFilter {
+      constructor({ minCutoff = 1.2, beta = 0.007, dCutoff = 1.0 } = {}) {
+        this.minCutoff = minCutoff;
+        this.beta = beta;
+        this.dCutoff = dCutoff;
+        this.lastTime = null;
+        this.dxFilter = new LowPassFilter(1);
+        this.xFilter = new LowPassFilter(1);
+      }
+      alpha(cutoff, dt) {
+        const tau = 1 / (2 * Math.PI * cutoff);
+        return 1 / (1 + tau / dt);
+      }
+      filter(value, timestamp) {
+        if (this.lastTime == null) {
+          this.lastTime = timestamp;
+          this.dxFilter.initialized = false;
+          this.xFilter.initialized = false;
+          return value;
+        }
+        const dt = Math.max((timestamp - this.lastTime) / 1000, 1e-6);
+        this.lastTime = timestamp;
+        const dx = this.xFilter.initialized ? (value - this.xFilter.last) / dt : 0;
+        const aD = this.alpha(this.dCutoff, dt);
+        this.dxFilter.setAlpha(aD);
+        const dxHat = this.dxFilter.filter(dx);
+        const cutoff = this.minCutoff + this.beta * Math.abs(dxHat);
+        const a = this.alpha(cutoff, dt);
+        this.xFilter.setAlpha(a);
+        return this.xFilter.filter(value);
+      }
+      reset() {
+        this.lastTime = null;
+        this.dxFilter.initialized = false;
+        this.xFilter.initialized = false;
+      }
+      clone() {
+        const clone = new OneEuroFilter({ minCutoff: this.minCutoff, beta: this.beta, dCutoff: this.dCutoff });
+        clone.lastTime = this.lastTime;
+        clone.dxFilter = this.dxFilter.clone();
+        clone.xFilter = this.xFilter.clone();
+        return clone;
+      }
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function currentFilterParams() {
+      return {
+        minCutoff: lerp(1.8, 0.8, stabilizeLevel),
+        beta: lerp(0.003, 0.015, stabilizeLevel),
+        dCutoff: 1.0
+      };
+    }
+
+    function createFilterSet() {
+      const params = currentFilterParams();
+      return {
+        x: new OneEuroFilter(params),
+        y: new OneEuroFilter(params),
+        p: new OneEuroFilter(params)
+      };
+    }
+
+    const pendingSegments = [];
+    let frameScheduled = false;
+    let lastFlushTime = 0;
+    let activeStroke = null;
+
+    // History using snapshots (fast)
+    let undoStack = [], redoStack = [];
+
+    function queueSegment(segment) {
+      pendingSegments.push(segment);
+    }
+
+    function requestFlush(forceImmediate = false) {
+      if (!pendingSegments.length) return;
+      const now = performance.now();
+      if (forceImmediate || now - lastFlushTime >= 6) {
+        drainSegments();
+        return;
+      }
+      if (!frameScheduled) {
+        frameScheduled = true;
+        requestAnimationFrame(drainSegments);
+      }
+    }
+
+    function drainSegments() {
+      frameScheduled = false;
+      if (!pendingSegments.length) return;
+      const segments = pendingSegments.splice(0);
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 4;
+      for (const seg of segments) {
+        const isEraser = seg.mode === 'eraser';
+        ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+        const strokeStyle = isEraser ? 'rgba(0,0,0,1)' : INK_COLOR;
+        ctx.strokeStyle = strokeStyle;
+        ctx.fillStyle = strokeStyle;
+        if (seg.type === 'dot') {
+          ctx.beginPath();
+          ctx.arc(seg.x, seg.y, seg.radius, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (seg.type === 'line') {
+          ctx.lineWidth = seg.width;
+          ctx.beginPath();
+          ctx.moveTo(seg.from.x, seg.from.y);
+          ctx.lineTo(seg.to.x, seg.to.y);
+          ctx.stroke();
+        } else if (seg.type === 'quad') {
+          ctx.lineWidth = seg.width;
+          ctx.beginPath();
+          ctx.moveTo(seg.from.x, seg.from.y);
+          ctx.quadraticCurveTo(seg.ctrl.x, seg.ctrl.y, seg.to.x, seg.to.y);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+      lastFlushTime = performance.now();
+    }
+
+    function clearPreview() {
+      ptx.save();
+      ptx.setTransform(1, 0, 0, 1, 0, 0);
+      ptx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+      ptx.restore();
+    }
+
+    function clearDrawSurface() {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+      ctx.restore();
+    }
+
+    function setCanvasSize() {
+      const r = pad.getBoundingClientRect();
+      dpr = Math.max(1, window.devicePixelRatio || 1);
+      [gridCanvas, previewCanvas, drawCanvas].forEach((c) => {
+        c.style.width = r.width + 'px';
+        c.style.height = r.height + 'px';
+        c.width = Math.round(r.width * dpr);
+        c.height = Math.round(r.height * dpr);
       });
-      gtx.setTransform(dpr,0,0,dpr,0,0);
-      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ptx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      gtx.setTransform(1, 0, 0, 1, 0, 0);
+      canvasBounds = drawCanvas.getBoundingClientRect();
+      clearPreview();
       drawGrid();
       restoreLatest();
     }
 
-    function drawGrid(){
-      gtx.clearRect(0,0,gridCanvas.width,gridCanvas.height);
-      if(!gridVisible) return;
-      const spacing=Number(gridInput.value);
-      const r=pad.getBoundingClientRect(), w=r.width, h=r.height;
-      // faint grid on colored background
+    function drawGrid() {
       gtx.save();
-      gtx.strokeStyle='rgba(0,0,0,.08)';
-      gtx.lineWidth=1;
+      gtx.setTransform(1, 0, 0, 1, 0, 0);
+      gtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+      gtx.restore();
+      if (!gridVisible) return;
+      const spacingCSS = Number(gridSizeSelect.value) || 24;
+      const spacing = spacingCSS * dpr;
+      gtx.save();
+      gtx.setTransform(1, 0, 0, 1, 0, 0);
+      gtx.lineWidth = 1;
+      gtx.strokeStyle = gridStroke;
       gtx.beginPath();
-      for(let x=0.5;x<=w;x+=spacing){gtx.moveTo(x,0);gtx.lineTo(x,h);}
-      for(let y=0.5;y<=h;y+=spacing){gtx.moveTo(0,y);gtx.lineTo(w,y);}
-      gtx.stroke(); gtx.restore();
-    }
-
-    // --- Palm rejection / stylus-only drawing ---
-    let isDrawing=false, activePointerId=null, last=null;
-
-    function beginDraw(e){
-      // Only Apple Pencil or mouse (not finger)
-      if (e.pointerType!=='pen' && !(e.pointerType==='mouse' && e.button===0)) return;
-      e.preventDefault();
-      drawCanvas.setPointerCapture?.(e.pointerId);
-      activePointerId=e.pointerId; isDrawing=true; last=point(e);
-      pushUndo();
-      document.body.classList.add('drawing'); // disable text selection while drawing
-      // draw a tiny seed to avoid missing first segment
-      ctx.save(); configureCtx(e); ctx.beginPath(); ctx.arc(last.x,last.y,ctx.lineWidth/2,0,Math.PI*2); ctx.fillStyle=(mode==='eraser')?'#000':'#111'; if(mode==='eraser') ctx.globalCompositeOperation='destination-out'; else ctx.globalCompositeOperation='source-over'; ctx.fill(); ctx.restore();
-    }
-
-    function moveDraw(e){
-      if(!isDrawing || e.pointerId!==activePointerId) return;
-      e.preventDefault();
-      // Use all coalesced points (smooth continuous line on iPad)
-      const evts = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
-      ctx.save(); configureCtx(e); ctx.beginPath(); ctx.moveTo(last.x,last.y);
-      for(const ce of evts){
-        const p = point(ce);
-        ctx.lineTo(p.x,p.y);
-        last = p;
+      for (let x = 0.5; x <= gridCanvas.width; x += spacing) {
+        gtx.moveTo(x, 0);
+        gtx.lineTo(x, gridCanvas.height);
       }
-      ctx.stroke(); ctx.restore();
+      for (let y = 0.5; y <= gridCanvas.height; y += spacing) {
+        gtx.moveTo(0, y);
+        gtx.lineTo(gridCanvas.width, y);
+      }
+      gtx.stroke();
+      gtx.restore();
     }
 
-    function endDraw(e){
-      if(!isDrawing || e.pointerId!==activePointerId) return;
-      e.preventDefault();
-      isDrawing=false; activePointerId=null; last=null;
-      redoStack.length=0;
-      document.body.classList.remove('drawing');
+    function pushUndo() {
+      try {
+        const snap = document.createElement('canvas');
+        snap.width = drawCanvas.width;
+        snap.height = drawCanvas.height;
+        snap.getContext('2d').drawImage(drawCanvas, 0, 0);
+        undoStack.push(snap);
+        if (undoStack.length > 40) undoStack.shift();
+      } catch {}
     }
 
-    function point(e){
-      const r=drawCanvas.getBoundingClientRect();
-      return {x:e.clientX - r.left, y:e.clientY - r.top};
+    function restoreLatest() {
+      clearDrawSurface();
+      const last = undoStack[undoStack.length - 1];
+      if (last && last.width === drawCanvas.width && last.height === drawCanvas.height) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(last, 0, 0);
+        ctx.restore();
+      } else if (last) {
+        undoStack.length = 0;
+      }
     }
 
-    function sizeFor(e){
-      const base=Number(sizeInputR.value);
-      const pressure=(e.pressure && e.pressure>0)? e.pressure : 0.6;
-      const scale=(mode==='eraser')?3.2:(0.9+pressure*1.1);
-      return base*scale;
-    }
-
-    function configureCtx(e){
-      ctx.lineCap='round'; ctx.lineJoin='round'; ctx.miterLimit=2;
-      ctx.lineWidth = sizeFor(e);
-      if(mode==='eraser'){ ctx.globalCompositeOperation='destination-out'; }
-      else { ctx.globalCompositeOperation='source-over'; ctx.strokeStyle='#111'; }
-    }
-
-    // History using snapshots (fast drawImage)
-    function pushUndo(){
-      try{
-        const snap=document.createElement('canvas');
-        snap.width=drawCanvas.width; snap.height=drawCanvas.height;
-        snap.getContext('2d').drawImage(drawCanvas,0,0);
-        undoStack.push(snap); if(undoStack.length>40) undoStack.shift();
-      }catch{}
-    }
-    function restoreLatest(){
-      ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
-      const last=undoStack[undoStack.length-1];
-      if(last && last.width===drawCanvas.width && last.height===drawCanvas.height){
-        ctx.drawImage(last,0,0);
-      }else if(last){ undoStack.length=0; }
-    }
-    function doUndo(){
-      if(!undoStack.length) return;
-      const cur=document.createElement('canvas'); cur.width=drawCanvas.width; cur.height=drawCanvas.height; cur.getContext('2d').drawImage(drawCanvas,0,0);
+    function doUndo() {
+      if (!undoStack.length) return;
+      const cur = document.createElement('canvas');
+      cur.width = drawCanvas.width;
+      cur.height = drawCanvas.height;
+      cur.getContext('2d').drawImage(drawCanvas, 0, 0);
       redoStack.push(cur);
-      const prev=undoStack.pop();
-      ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
-      if(prev) ctx.drawImage(prev,0,0);
-    }
-    function doRedo(){
-      if(!redoStack.length) return;
-      const cur=document.createElement('canvas'); cur.width=drawCanvas.width; cur.height=drawCanvas.height; cur.getContext('2d').drawImage(drawCanvas,0,0);
-      undoStack.push(cur);
-      const next=redoStack.pop();
-      ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
-      if(next) ctx.drawImage(next,0,0);
+      const prev = undoStack.pop();
+      clearDrawSurface();
+      if (prev) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(prev, 0, 0);
+        ctx.restore();
+      }
+      clearPreview();
     }
 
-    // Export
-    function exportMergedCanvas(){
-      const r=pad.getBoundingClientRect();
-      const out=document.createElement('canvas');
-      out.width=Math.round(r.width*dpr); out.height=Math.round(r.height*dpr);
-      const ex=out.getContext('2d'); ex.setTransform(dpr,0,0,dpr,0,0);
-      if(gridVisible) ex.drawImage(gridCanvas,0,0,out.width,out.height);
-      ex.drawImage(drawCanvas,0,0,out.width,out.height);
+    function doRedo() {
+      if (!redoStack.length) return;
+      const cur = document.createElement('canvas');
+      cur.width = drawCanvas.width;
+      cur.height = drawCanvas.height;
+      cur.getContext('2d').drawImage(drawCanvas, 0, 0);
+      undoStack.push(cur);
+      const next = redoStack.pop();
+      clearDrawSurface();
+      if (next) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(next, 0, 0);
+        ctx.restore();
+      }
+      clearPreview();
+    }
+
+    function exportMergedCanvas() {
+      const r = pad.getBoundingClientRect();
+      const out = document.createElement('canvas');
+      out.width = Math.round(r.width * dpr);
+      out.height = Math.round(r.height * dpr);
+      const ex = out.getContext('2d');
+      if (gridVisible) ex.drawImage(gridCanvas, 0, 0);
+      ex.drawImage(drawCanvas, 0, 0);
       return out.toDataURL('image/png');
     }
     window.exportMergedCanvas = exportMergedCanvas;
-    document.getElementById('exportCanvasBtn').addEventListener('click', ()=>{const a=document.createElement('a');a.download='canvas.png';a.href=exportMergedCanvas();a.click();});
-
-    // UI wiring
-    function setMode(m){mode=m;penBtn.classList.toggle('active',m==='pen');eraserBtn.classList.toggle('active',m==='eraser');}
-    penBtn.addEventListener('click',()=>setMode('pen'));
-    eraserBtn.addEventListener('click',()=>setMode('eraser'));
-    sizeInputR.addEventListener('input',()=>sizeVal.textContent=sizeInputR.value);
-    gridInput.addEventListener('input',()=>{gridVal.textContent=gridInput.value;drawGrid();});
-    toggleGridBtn.addEventListener('click',()=>{gridVisible=!gridVisible;drawGrid();});
-    undoBtn.addEventListener('click',doUndo);
-    redoBtn.addEventListener('click',doRedo);
-    clearBtn.addEventListener('click',()=>{pushUndo();ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);redoStack.length=0;});
-
-    window.addEventListener('keydown',(e)=>{
-      if(e.key==='p'||e.key==='P') setMode('pen');
-      if(e.key==='e'||e.key==='E') setMode('eraser');
-      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){e.preventDefault();doUndo();}
-      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&e.shiftKey){e.preventDefault();doRedo();}
+    exportCanvasBtn.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.download = 'canvas.png';
+      a.href = exportMergedCanvas();
+      a.click();
     });
 
-    // Pointer events (stylus-only)
-    drawCanvas.addEventListener('pointerdown', beginDraw, {passive:false});
-    drawCanvas.addEventListener('pointermove',  moveDraw,  {passive:false});
-    window.addEventListener('pointerup',   endDraw, {passive:false});
-    window.addEventListener('pointercancel',endDraw,{passive:false});
-    window.addEventListener('blur', endDraw);
+    function widthFor(modeName, pressure) {
+      const base = Number(sizeInput.value);
+      const scale = modeName === 'eraser' ? 3.2 : (0.9 + pressure * 1.1);
+      return base * scale;
+    }
 
-    // Prevent stray touch events on the pad from doing anything
-    pad.addEventListener('touchstart', e=>e.preventDefault(), {passive:false});
-    pad.addEventListener('touchmove',  e=>e.preventDefault(), {passive:false});
+    function midpoint(a, b) {
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    }
 
-    const ro=new ResizeObserver(setCanvasSize); ro.observe(pad);
+    function toCanvasPoint(evt) {
+      return {
+        x: evt.clientX - canvasBounds.left,
+        y: evt.clientY - canvasBounds.top
+      };
+    }
+
+    function clampPressure(value) {
+      return Math.min(1, Math.max(0.05, value));
+    }
+
+    function createSample(evt, stroke) {
+      const timestamp = evt.timeStamp;
+      const coords = toCanvasPoint(evt);
+      const rawPressure = stroke.pointerType === 'pen' ? (evt.pressure && evt.pressure > 0 ? evt.pressure : 0.5) : 0.6;
+      let pressure = clampPressure(rawPressure);
+      let x = coords.x;
+      let y = coords.y;
+      if (smoothingEnabled && stroke.filters) {
+        x = stroke.filters.x.filter(x, timestamp);
+        y = stroke.filters.y.filter(y, timestamp);
+        if (stroke.pointerType === 'pen') {
+          pressure = clampPressure(stroke.filters.p.filter(pressure, timestamp));
+        }
+      }
+      return {
+        x,
+        y,
+        pressure,
+        width: widthFor(stroke.mode, pressure),
+        time: timestamp
+      };
+    }
+
+    function addPointToStroke(stroke, point) {
+      const pts = stroke.points;
+      if (pts.length) {
+        const prev = pts[pts.length - 1];
+        const dist = Math.hypot(point.x - prev.x, point.y - prev.y);
+        if (dist < 0.5 && Math.abs(point.pressure - prev.pressure) < 0.02) {
+          pts[pts.length - 1] = point;
+          if (smoothingEnabled && pts.length >= 2) {
+            const secondLast = pts[pts.length - 2];
+            stroke.prevMidpoint = midpoint(secondLast, point);
+          }
+          stroke.lastPoint = point;
+          return;
+        }
+      }
+      pts.push(point);
+      if (pts.length === 1) {
+        queueSegment({ type: 'dot', mode: stroke.mode, x: point.x, y: point.y, radius: point.width / 2 });
+      } else {
+        const prev = pts[pts.length - 2];
+        const avgWidth = (prev.width + point.width) / 2;
+        if (!smoothingEnabled) {
+          queueSegment({ type: 'line', mode: stroke.mode, from: prev, to: point, width: avgWidth });
+        } else {
+          const mid = midpoint(prev, point);
+          if (!stroke.prevMidpoint) {
+            queueSegment({ type: 'line', mode: stroke.mode, from: prev, to: mid, width: avgWidth });
+          } else {
+            queueSegment({ type: 'quad', mode: stroke.mode, from: stroke.prevMidpoint, ctrl: prev, to: mid, width: avgWidth });
+          }
+          stroke.prevMidpoint = mid;
+        }
+      }
+      stroke.lastPoint = point;
+    }
+
+    function finishStroke(stroke) {
+      if (!stroke || !stroke.points.length) return;
+      if (smoothingEnabled && stroke.prevMidpoint && stroke.points.length >= 2) {
+        const last = stroke.points[stroke.points.length - 1];
+        const prev = stroke.points[stroke.points.length - 2];
+        const avgWidth = (prev.width + last.width) / 2;
+        queueSegment({ type: 'line', mode: stroke.mode, from: stroke.prevMidpoint, to: last, width: avgWidth });
+      }
+      requestFlush(true);
+    }
+
+    function processSamples(events, stroke, forceFlush = false) {
+      const queuedBefore = pendingSegments.length;
+      for (const evt of events) {
+        const sample = createSample(evt, stroke);
+        addPointToStroke(stroke, sample);
+      }
+      if (pendingSegments.length !== queuedBefore) {
+        requestFlush(forceFlush);
+      }
+    }
+
+    function drawPredictions(predictedEvents, stroke) {
+      if (!predictedEvents.length || !stroke.lastPoint) return;
+      ptx.save();
+      ptx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ptx.lineCap = 'round';
+      ptx.lineJoin = 'round';
+      ptx.miterLimit = 4;
+      ptx.strokeStyle = stroke.mode === 'eraser' ? 'rgba(0,0,0,0.2)' : 'rgba(12,18,28,0.25)';
+      ptx.lineWidth = stroke.lastPoint.width;
+      ptx.beginPath();
+      ptx.moveTo(stroke.lastPoint.x, stroke.lastPoint.y);
+      for (const evt of predictedEvents) {
+        const coords = toCanvasPoint(evt);
+        ptx.lineTo(coords.x, coords.y);
+      }
+      ptx.stroke();
+      ptx.restore();
+    }
+
+    function beginDraw(e) {
+      if (e.pointerType !== 'pen' && !(e.pointerType === 'mouse' && e.button === 0)) return;
+      e.preventDefault();
+      pushUndo();
+      const stroke = {
+        id: e.pointerId,
+        mode,
+        pointerType: e.pointerType,
+        filters: smoothingEnabled ? createFilterSet() : null,
+        points: [],
+        prevMidpoint: null,
+        lastPoint: null
+      };
+      activeStroke = stroke;
+      redoStack.length = 0;
+      document.body.classList.add('drawing');
+      canvasBounds = drawCanvas.getBoundingClientRect();
+      clearPreview();
+      drawCanvas.setPointerCapture?.(e.pointerId);
+      processSamples([e], stroke, true);
+    }
+
+    function moveDraw(e) {
+      if (!activeStroke || e.pointerId !== activeStroke.id) return;
+      e.preventDefault();
+      const events = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
+      clearPreview();
+      processSamples(events, activeStroke);
+      const predicted = e.getPredictedEvents ? e.getPredictedEvents() : [];
+      if (predicted && predicted.length) {
+        drawPredictions(predicted, activeStroke);
+      }
+    }
+
+    function endDraw(e) {
+      if (!activeStroke) return;
+      if (e && e.pointerId !== activeStroke.id) return;
+      if (e) e.preventDefault();
+      finishStroke(activeStroke);
+      clearPreview();
+      document.body.classList.remove('drawing');
+      if (e) {
+        drawCanvas.releasePointerCapture?.(e.pointerId);
+      } else if (activeStroke) {
+        drawCanvas.releasePointerCapture?.(activeStroke.id);
+      }
+      activeStroke = null;
+    }
+
+    function setMode(m) {
+      mode = m;
+      penBtn.classList.toggle('active', m === 'pen');
+      eraserBtn.classList.toggle('active', m === 'eraser');
+      penBtn.setAttribute('aria-pressed', m === 'pen');
+      eraserBtn.setAttribute('aria-pressed', m === 'eraser');
+    }
+
+    function updateSizeLabel() {
+      sizeVal.textContent = `${Number(sizeInput.value).toFixed(1)} px`;
+    }
+
+    function updateGridToggle() {
+      gridToggleBtn.textContent = gridVisible ? 'Grid On' : 'Grid Off';
+      gridToggleBtn.classList.toggle('active', gridVisible);
+      gridToggleBtn.setAttribute('aria-pressed', gridVisible);
+    }
+
+    function updateSmoothButton() {
+      smoothBtn.classList.toggle('active', smoothingEnabled);
+      smoothBtn.setAttribute('aria-pressed', smoothingEnabled);
+    }
+
+    function updateStabilizeLabel() {
+      stabilizeVal.textContent = stabilizeLevel.toFixed(2);
+    }
+
+    penBtn.addEventListener('click', () => setMode('pen'));
+    eraserBtn.addEventListener('click', () => setMode('eraser'));
+    sizeInput.addEventListener('input', () => { updateSizeLabel(); });
+    gridSizeSelect.addEventListener('change', () => { drawGrid(); });
+    gridToggleBtn.addEventListener('click', () => { gridVisible = !gridVisible; updateGridToggle(); drawGrid(); });
+    undoBtn.addEventListener('click', doUndo);
+    redoBtn.addEventListener('click', doRedo);
+    clearBtn.addEventListener('click', () => {
+      pushUndo();
+      clearDrawSurface();
+      redoStack.length = 0;
+      clearPreview();
+    });
+    smoothBtn.addEventListener('click', () => {
+      smoothingEnabled = !smoothingEnabled;
+      updateSmoothButton();
+    });
+    stabilizeInput.addEventListener('input', () => {
+      stabilizeLevel = Number(stabilizeInput.value);
+      updateStabilizeLabel();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'p' || e.key === 'P') setMode('pen');
+      if (e.key === 'e' || e.key === 'E') setMode('eraser');
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        doUndo();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey) {
+        e.preventDefault();
+        doRedo();
+      }
+    });
+
+    drawCanvas.addEventListener('pointerdown', beginDraw, { passive: false });
+    drawCanvas.addEventListener('pointermove', moveDraw, { passive: false });
+    window.addEventListener('pointerup', endDraw, { passive: false });
+    window.addEventListener('pointercancel', endDraw, { passive: false });
+    window.addEventListener('blur', () => { endDraw(); });
+
+    pad.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    pad.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+    const ro = new ResizeObserver(setCanvasSize); ro.observe(pad);
     window.addEventListener('orientationchange', setCanvasSize);
     window.addEventListener('load', setCanvasSize);
 
-    sizeVal.textContent=sizeInputR.value; gridVal.textContent=gridInput.value;
-    setCanvasSize(); pushUndo();
+    updateSizeLabel();
+    updateGridToggle();
+    updateSmoothButton();
+    updateStabilizeLabel();
+    setCanvasSize();
+    pushUndo();
   </script>
 </body>
 </html>
