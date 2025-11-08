@@ -1,168 +1,523 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Study Suite — Rehearse</title>
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style.css" />
   <script src="sets.js"></script>
   <style>
-    .wrap { max-width: 1100px; margin: 16px auto; padding: 0 16px; }
-    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin: 12px 0; }
-    .btn { background:#1a2030; color:var(--text); border:1px solid var(--border); padding:10px 12px; border-radius:10px; text-decoration:none; }
-    .btn:hover { transform: translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,0.25); }
-    .muted { color: var(--muted); }
-    .canvas-wrap { position:relative; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:#0b0f15; margin-top:10px; }
-    canvas { display:block; width:100%; height:auto; }
-    #grid { position:absolute; inset:0; }
-    #view { position:absolute; inset:0; }
-    .controls { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    body {
+      margin: 0;
+    }
+    .rehearse-page .cards-grid.single {
+      grid-template-columns: minmax(280px, min(520px, 100%));
+      justify-content: center;
+    }
+    .rehearse-page .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .rehearse-page .card-progress {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .rehearse-page .card-cell {
+      cursor: pointer;
+    }
+    .rehearse-pad {
+      aspect-ratio: 3 / 2;
+      cursor: inherit;
+    }
+    .rehearse-pad canvas {
+      pointer-events: none;
+    }
   </style>
 </head>
-<body>
+<body class="rehearse-page">
   <div class="wrap">
     <div class="topbar">
-      <div>
+      <div class="nav-links">
         <a class="btn" href="index.html">← Home</a>
         <a class="btn" href="manage.html">Sets</a>
       </div>
-      <div>
-        <strong id="set-name">(set)</strong> <span class="muted">|</span> <span id="progress">1 / 1</span>
+      <div class="set-meta">
+        <h1>Rehearse cards</h1>
+        <div class="muted">Current set: <span id="set-name">Default</span></div>
       </div>
-      <div></div>
+      <div class="nav-links">
+        <button class="btn" id="btn-pick-set" type="button">Change set</button>
+        <a class="btn" id="btn-edit" href="editor.html">✏️ Edit</a>
+      </div>
     </div>
 
-    <div class="controls">
-      <button class="btn" id="btn-pick-set">Pick Set</button>
-      <button class="btn" id="btn-prev">◀ Prev</button>
-      <button class="btn" id="btn-flip">Flip</button>
-      <button class="btn" id="btn-next">Next ▶</button>
-      <button class="btn" id="btn-shuffle">Shuffle</button>
-      <button class="btn" id="btn-edit">Edit this Set</button>
-    </div>
+    <section class="cards-section rehearse-section">
+      <header class="cards-header">
+        <div class="controls">
+          <button class="btn" id="btn-prev" type="button">◀ Prev</button>
+          <button class="btn" id="btn-flip" type="button">Flip</button>
+          <button class="btn" id="btn-next" type="button">Next ▶</button>
+          <button class="btn" id="btn-shuffle" type="button">Shuffle</button>
+        </div>
+        <div class="card-progress">Card <span id="progress">1 / 1</span></div>
+      </header>
 
-    <div class="canvas-wrap">
-      <canvas id="grid" width="1200" height="800"></canvas>
-      <canvas id="view" width="1200" height="800"></canvas>
-    </div>
+      <div class="cards-grid single" id="rehearseGrid">
+        <article class="card-cell front" id="cardCell">
+          <div class="card-cell-header">
+            <span class="card-side-tag" id="cardSideTag">Front</span>
+          </div>
+          <div class="canvas-card">
+            <div class="canvas-pad rehearse-pad" id="rehearsePad">
+              <canvas class="grid-layer" id="grid"></canvas>
+              <canvas class="ink-layer" id="view"></canvas>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
   </div>
 
   <script>
-    const params = new URLSearchParams(location.search);
-    let setId = params.get('set') || 'default';
-    const STORAGE_KEY = () => SetsAPI.storageKeyFor(setId);
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      let setId = params.get('set') || 'default';
 
-    const grid = document.getElementById('grid');
-    const view = document.getElementById('view');
-    const g = grid.getContext('2d');
-    const v = view.getContext('2d');
+      const pad = document.getElementById('rehearsePad');
+      const grid = document.getElementById('grid');
+      const view = document.getElementById('view');
+      const cardCell = document.getElementById('cardCell');
+      const cardSideTag = document.getElementById('cardSideTag');
+      const progressEl = document.getElementById('progress');
+      const setNameEl = document.getElementById('set-name');
+      const gridContainer = document.getElementById('rehearseGrid');
 
-    const setNameEl = document.getElementById('set-name');
-    const progressEl = document.getElementById('progress');
+      const btnPrev = document.getElementById('btn-prev');
+      const btnNext = document.getElementById('btn-next');
+      const btnFlip = document.getElementById('btn-flip');
+      const btnShuffle = document.getElementById('btn-shuffle');
+      const btnEdit = document.getElementById('btn-edit');
+      const btnPick = document.getElementById('btn-pick-set');
 
-    const btnPrev = document.getElementById('btn-prev');
-    const btnNext = document.getElementById('btn-next');
-    const btnFlip = document.getElementById('btn-flip');
-    const btnShuffle = document.getElementById('btn-shuffle');
-    const btnEdit = document.getElementById('btn-edit');
-    const btnPick = document.getElementById('btn-pick-set');
+      const gridCtx = grid.getContext('2d');
+      const viewCtx = view.getContext('2d', { desynchronized: true });
 
-    let deck = [];
-    let index = 0;
-    let side = 'front';
+      let deck = [];
+      let index = 0;
+      let side = 'front';
+      let currentSetName = '(set)';
+      let dpr = Math.max(1, window.devicePixelRatio || 1);
+      let padRect = pad.getBoundingClientRect();
 
-    function drawGrid() {
-      const w = grid.width, h = grid.height;
-      g.clearRect(0,0,w,h);
-      g.fillStyle = '#0b0f15'; g.fillRect(0,0,w,h);
-      const GRID = 24;
-      g.strokeStyle = 'rgba(122,162,247,0.12)'; g.lineWidth = 1; g.beginPath();
-      for (let x=0; x<=w; x+=GRID) { g.moveTo(x+0.5,0); g.lineTo(x+0.5,h); }
-      for (let y=0; y<=h; y+=GRID) { g.moveTo(0,y+0.5); g.lineTo(w,y+0.5); }
-      g.stroke();
-      g.strokeStyle = 'rgba(160,170,190,0.35)'; g.lineWidth = 2; g.strokeRect(8.5,8.5,w-17,h-17);
-    }
-
-    function render() {
-      v.clearRect(0,0,view.width, view.height);
-      if (!deck.length) return;
-      const card = deck[index];
-      const content = card[side];
-      // images
-      for (const img of content.images) {
-        if (!img.__image) continue;
-        const a = (typeof img.angle === 'number') ? img.angle : 0;
-        const w = img.w * (img.scale/100);
-        const h = img.h * (img.scale/100);
-        const cx = img.x + w/2, cy = img.y + h/2;
-        v.save(); v.translate(cx, cy); v.rotate(a * Math.PI/180);
-        v.drawImage(img.__image, -w/2, -h/2, w, h); v.restore();
+      function resolveCssColor(varName, fallback) {
+        const root = getComputedStyle(document.documentElement);
+        const raw = root.getPropertyValue(varName);
+        if (!raw) return fallback;
+        const probe = document.createElement('span');
+        probe.style.color = raw;
+        probe.style.display = 'none';
+        document.body.appendChild(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color || fallback;
       }
-      // strokes
-      for (const s of content.strokes) {
-        v.save();
-        v.lineJoin = 'round'; v.lineCap = 'round';
-        v.globalCompositeOperation = s.mode || 'source-over';
-        v.strokeStyle = s.color || '#e7e9ee';
-        v.lineWidth = s.size || 2;
-        v.beginPath();
-        for (let i=0;i<s.points.length;i++) {
-          const p = s.points[i];
-          if (i===0) v.moveTo(p.x, p.y); else v.lineTo(p.x, p.y);
+
+      function resolveGridStroke() {
+        const muted = resolveCssColor('--muted', 'rgb(159, 169, 198)');
+        const rgb = muted.match(/\d+/g);
+        if (rgb && rgb.length >= 3) {
+          return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.2)`;
         }
-        v.stroke();
-        v.restore();
+        return 'rgba(159, 169, 198, 0.2)';
       }
-      progressEl.textContent = `${index+1} / ${deck.length} — ${side}`;
-      setNameEl.textContent = SetsAPI.getSetName(setId);
-    }
 
-    function attachImages() {
-      for (const card of deck) {
-        for (const sideName of ['front','back']) {
-          for (const im of card[sideName].images) {
-            const img = new Image();
-            img.onload = () => { im.__image = img; render(); };
-            img.src = im.src;
+      function updateMeta() {
+        if (progressEl) {
+          progressEl.textContent = `${deck.length ? index + 1 : 0} / ${deck.length || 0}`;
+        }
+        if (cardSideTag) {
+          const isBack = side === 'back';
+          cardSideTag.textContent = isBack ? 'Back' : 'Front';
+          cardSideTag.classList.toggle('is-back', isBack);
+          cardSideTag.classList.toggle('is-front', !isBack);
+          cardSideTag.setAttribute('data-side', isBack ? 'back' : 'front');
+        }
+        if (cardCell) {
+          const isBack = side === 'back';
+          cardCell.classList.toggle('back', isBack);
+          cardCell.classList.toggle('front', !isBack);
+          cardCell.setAttribute('data-side', isBack ? 'back' : 'front');
+          cardCell.setAttribute('aria-pressed', isBack ? 'true' : 'false');
+        }
+      }
+
+      function goPrevCard() {
+        if (index > 0) {
+          index -= 1;
+          side = 'front';
+          render();
+        }
+      }
+
+      function goNextCard() {
+        if (index < deck.length - 1) {
+          index += 1;
+          side = 'front';
+          render();
+        }
+      }
+
+      function getSideDimensions(content) {
+        if (!content || typeof content !== 'object') {
+          return { width: padRect.width || 1, height: padRect.height || 1 };
+        }
+        const dims = content.dimensions;
+        const width = dims && Number.isFinite(dims.width) && dims.width > 0 ? dims.width : padRect.width || 1;
+        const height = dims && Number.isFinite(dims.height) && dims.height > 0 ? dims.height : padRect.height || 1;
+        return { width, height };
+      }
+
+      function clearCanvas(ctx, canvas) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+
+      function drawGrid() {
+        if (!grid.width || !grid.height) return;
+        clearCanvas(gridCtx, grid);
+        if (!padRect.width || !padRect.height) return;
+        const surface = resolveCssColor('--surface', '#ffffff');
+        const stroke = resolveGridStroke();
+        const width = grid.width / dpr;
+        const height = grid.height / dpr;
+        gridCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        gridCtx.fillStyle = surface || '#ffffff';
+        gridCtx.fillRect(0, 0, width, height);
+        gridCtx.strokeStyle = stroke;
+        gridCtx.lineWidth = 1;
+        const spacing = 24;
+        gridCtx.beginPath();
+        for (let x = spacing; x < width; x += spacing) {
+          gridCtx.moveTo(x + 0.5, 0);
+          gridCtx.lineTo(x + 0.5, height);
+        }
+        for (let y = spacing; y < height; y += spacing) {
+          gridCtx.moveTo(0, y + 0.5);
+          gridCtx.lineTo(width, y + 0.5);
+        }
+        gridCtx.stroke();
+      }
+
+      function render() {
+        clearCanvas(viewCtx, view);
+        if (!deck.length || !padRect.width || !padRect.height) {
+          updateMeta();
+          return;
+        }
+        const card = deck[index];
+        const content = card ? (card[side] || { strokes: [], images: [] }) : { strokes: [], images: [] };
+        const { width: baseWidth, height: baseHeight } = getSideDimensions(content);
+        const width = padRect.width || baseWidth;
+        const height = padRect.height || baseHeight;
+        const scaleX = baseWidth ? width / baseWidth : 1;
+        const scaleY = baseHeight ? height / baseHeight : 1;
+
+        viewCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        viewCtx.save();
+        viewCtx.scale(scaleX, scaleY);
+
+        if (Array.isArray(content.images)) {
+          for (const im of content.images) {
+            if (!im || !im.src) continue;
+            if (!im.__image) {
+              const img = new Image();
+              img.onload = () => {
+                im.__image = img;
+                render();
+              };
+              img.src = im.src;
+              continue;
+            }
+            const angle = typeof im.angle === 'number' ? im.angle : Number(im.angle) || 0;
+            const scale = typeof im.scale === 'number' ? im.scale : Number(im.scale) || 100;
+            const baseW = typeof im.w === 'number' ? im.w : Number(im.w) || im.__image.naturalWidth || 0;
+            const baseH = typeof im.h === 'number' ? im.h : Number(im.h) || im.__image.naturalHeight || 0;
+            const drawW = baseW * (scale / 100);
+            const drawH = baseH * (scale / 100);
+            const posX = typeof im.x === 'number' ? im.x : Number(im.x) || 0;
+            const posY = typeof im.y === 'number' ? im.y : Number(im.y) || 0;
+            const cx = posX + drawW / 2;
+            const cy = posY + drawH / 2;
+            viewCtx.save();
+            viewCtx.translate(cx, cy);
+            viewCtx.rotate(angle * Math.PI / 180);
+            viewCtx.drawImage(im.__image, -drawW / 2, -drawH / 2, drawW, drawH);
+            viewCtx.restore();
+          }
+        }
+
+        if (Array.isArray(content.strokes)) {
+          for (const stroke of content.strokes) {
+            if (!stroke || !Array.isArray(stroke.points) || !stroke.points.length) continue;
+            viewCtx.save();
+            viewCtx.globalCompositeOperation = stroke.mode || 'source-over';
+            viewCtx.lineJoin = 'round';
+            viewCtx.lineCap = 'round';
+            const strokeColor = stroke.color || (stroke.mode === 'destination-out' ? 'rgba(0,0,0,1)' : '#111827');
+            viewCtx.strokeStyle = strokeColor;
+            const lineWidth = typeof stroke.size === 'number' ? stroke.size : Number(stroke.size) || 2;
+            viewCtx.lineWidth = lineWidth;
+            if (stroke.points.length === 1) {
+              const p = stroke.points[0];
+              const x = typeof p.x === 'number' ? p.x : Number(p.x) || 0;
+              const y = typeof p.y === 'number' ? p.y : Number(p.y) || 0;
+              viewCtx.beginPath();
+              viewCtx.arc(x, y, viewCtx.lineWidth / 2, 0, Math.PI * 2);
+              viewCtx.fillStyle = strokeColor;
+              viewCtx.fill();
+              viewCtx.restore();
+              continue;
+            }
+            const pts = stroke.points.map((pt) => ({
+              x: typeof pt.x === 'number' ? pt.x : Number(pt.x) || 0,
+              y: typeof pt.y === 'number' ? pt.y : Number(pt.y) || 0
+            }));
+            viewCtx.beginPath();
+            let prev = pts[0];
+            viewCtx.moveTo(prev.x, prev.y);
+            for (let i = 1; i < pts.length; i++) {
+              const current = pts[i];
+              const midX = (prev.x + current.x) / 2;
+              const midY = (prev.y + current.y) / 2;
+              viewCtx.quadraticCurveTo(prev.x, prev.y, midX, midY);
+              prev = current;
+            }
+            const penultimate = pts[pts.length - 2];
+            const last = pts[pts.length - 1];
+            viewCtx.quadraticCurveTo(penultimate.x, penultimate.y, last.x, last.y);
+            if (stroke.mode === 'destination-out') {
+              viewCtx.strokeStyle = 'rgba(0,0,0,1)';
+            }
+            viewCtx.stroke();
+            viewCtx.restore();
+          }
+        }
+
+        viewCtx.restore();
+        updateMeta();
+      }
+
+      function updateCanvasSize() {
+        const rect = pad.getBoundingClientRect();
+        if (!rect.width || !rect.height) {
+          return;
+        }
+        padRect = rect;
+        dpr = Math.max(1, window.devicePixelRatio || 1);
+        const width = Math.max(1, Math.round(rect.width * dpr));
+        const height = Math.max(1, Math.round(rect.height * dpr));
+        [grid, view].forEach((canvas) => {
+          canvas.width = width;
+          canvas.height = height;
+        });
+        drawGrid();
+        render();
+      }
+
+      const resizeObserver = new ResizeObserver(() => updateCanvasSize());
+      resizeObserver.observe(pad);
+      window.addEventListener('resize', updateCanvasSize);
+      window.addEventListener('orientationchange', () => setTimeout(updateCanvasSize, 160));
+
+      async function ensureSet() {
+        if (!window.SetsAPI) return;
+        let sets = [];
+        try {
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error(err);
+        }
+        if (!sets.length) {
+          const created = await SetsAPI.createSet('Default');
+          sets = [created];
+        }
+        if (!sets.some((s) => s.id === setId)) {
+          setId = sets[sets.length - 1].id;
+          params.set('set', setId);
+          const url = new URL(location.href);
+          url.search = params.toString();
+          history.replaceState({}, '', url.toString());
+        }
+      }
+
+      async function updateSetName() {
+        if (!window.SetsAPI) {
+          currentSetName = setId;
+        } else {
+          try {
+            currentSetName = await SetsAPI.getSetName(setId);
+          } catch (err) {
+            console.error(err);
+            currentSetName = setId;
+          }
+        }
+        if (setNameEl) {
+          setNameEl.textContent = currentSetName;
+        }
+      }
+
+      function attachImages() {
+        for (const card of deck) {
+          for (const sideName of ['front', 'back']) {
+            const content = card && card[sideName];
+            if (!content || !Array.isArray(content.images)) continue;
+            for (const im of content.images) {
+              if (!im || !im.src || im.__image) continue;
+              const img = new Image();
+              img.onload = () => {
+                im.__image = img;
+                render();
+              };
+              img.src = im.src;
+            }
           }
         }
       }
-    }
 
-    function loadDeck() {
-      const raw = localStorage.getItem(STORAGE_KEY());
-      deck = [];
-      if (raw) {
-        try { deck = JSON.parse(raw) || []; } catch(e) { deck = []; }
+      async function loadDeck() {
+        if (window.SetsAPI) {
+          try {
+            deck = await SetsAPI.loadDeck(setId);
+          } catch (err) {
+            console.error('Unable to load deck', err);
+            deck = [];
+          }
+        } else {
+          const candidates = [
+            `study_deck_sync_v1__${setId}`,
+            `study_deck_v2__${setId}`
+          ];
+          let raw = null;
+          for (const key of candidates) {
+            const val = localStorage.getItem(key);
+            if (val != null) {
+              raw = val;
+              break;
+            }
+          }
+          try { deck = raw ? JSON.parse(raw) || [] : []; } catch (e) { deck = []; }
+        }
+        if (!Array.isArray(deck) || !deck.length) {
+          deck = [{ front: { strokes: [], images: [] }, back: { strokes: [], images: [] }, createdAt: Date.now() }];
+        }
+        index = 0;
+        side = 'front';
+        attachImages();
+        await updateSetName();
+        updateLinks();
+        render();
       }
-      if (!Array.isArray(deck) || deck.length === 0) {
-        deck = [{ front:{strokes:[],images:[]}, back:{strokes:[],images:[]}, createdAt: Date.now() }];
-        localStorage.setItem(STORAGE_KEY(), JSON.stringify(deck));
+
+      function updateLinks() {
+        const encoded = encodeURIComponent(setId);
+        if (btnEdit) {
+          btnEdit.href = `editor.html?set=${encoded}`;
+        }
       }
-      index = 0; side = 'front';
-      attachImages();
-      render();
-    }
 
-    btnPrev.onclick = () => { if (index>0) { index--; side='front'; render(); } };
-    btnNext.onclick = () => { if (index<deck.length-1) { index++; side='front'; render(); } };
-    btnFlip.onclick = () => { side = (side==='front'?'back':'front'); render(); };
-    btnShuffle.onclick = () => {
-      deck.sort(() => Math.random() - 0.5); index = 0; side='front'; render();
-    };
-    btnEdit.onclick = () => { location.href = `editor.html?set=${setId}`; };
-    btnPick.onclick = () => {
-      const sets = SetsAPI.loadSets();
-      const names = sets.map(s=>`${s.name} (${s.id})`).join('\n');
-      const pick = prompt('Type a set id to open:\n' + names, setId);
-      if (!pick) return;
-      setId = pick.trim();
-      loadDeck();
-      history.replaceState({}, '', `rehearse.html?set=${setId}`);
-    };
+      function toggleSide() {
+        if (!deck.length) return;
+        side = side === 'front' ? 'back' : 'front';
+        render();
+      }
 
-    drawGrid();
-    loadDeck();
+      btnPrev?.addEventListener('click', () => {
+        goPrevCard();
+      });
+
+      btnNext?.addEventListener('click', () => {
+        goNextCard();
+      });
+
+      btnFlip?.addEventListener('click', () => {
+        toggleSide();
+      });
+
+      cardCell?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        toggleSide();
+      });
+
+      cardCell?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleSide();
+        }
+      });
+
+      if (cardCell) {
+        cardCell.setAttribute('role', 'button');
+        cardCell.setAttribute('tabindex', '0');
+        cardCell.setAttribute('aria-label', 'Flashcard. Click or press space to flip');
+      }
+
+      btnShuffle?.addEventListener('click', () => {
+        deck = [...deck].sort(() => Math.random() - 0.5);
+        index = 0;
+        side = 'front';
+        render();
+      });
+
+      gridContainer?.addEventListener('click', (event) => {
+        if (!deck.length) return;
+        if (event.defaultPrevented) return;
+        if (event.target.closest('.card-cell')) return;
+        const rect = gridContainer.getBoundingClientRect();
+        if (!rect.width) return;
+        const midpoint = rect.left + rect.width / 2;
+        if (event.clientX < midpoint) {
+          goPrevCard();
+        } else {
+          goNextCard();
+        }
+      });
+
+      btnPick?.addEventListener('click', async () => {
+        if (!window.SetsAPI) return;
+        let sets = [];
+        try {
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error(err);
+        }
+        if (!sets.length) {
+          alert('No sets available.');
+          return;
+        }
+        const options = sets.map((s) => `${s.name} (${s.id})`).join('\n');
+        const pick = prompt('Type a set id to open:\n' + options, setId);
+        if (!pick) return;
+        const trimmed = pick.trim();
+        if (!trimmed) return;
+        if (!sets.some((s) => s.id === trimmed)) {
+          alert('Set not found.');
+          return;
+        }
+        setId = trimmed;
+        params.set('set', setId);
+        const url = new URL(location.href);
+        url.search = params.toString();
+        history.replaceState({}, '', url.toString());
+        await loadDeck();
+      });
+
+      await ensureSet();
+      requestAnimationFrame(() => updateCanvasSize());
+      await loadDeck();
+    })();
   </script>
 </body>
 </html>

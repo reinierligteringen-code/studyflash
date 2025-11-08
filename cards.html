@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Study Suite — Cards</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="sets.js"></script>
+  <style>
+    body {
+      margin: 0;
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px 96px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .set-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 200px;
+    }
+    .set-meta h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.2;
+    }
+    .set-meta .muted {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .cards-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .cards-section header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .cards-section h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(260px, 1fr));
+      gap: 18px;
+    }
+    @media (max-width: 720px) {
+      .cards-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .card-cell {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+    }
+    .card-cell-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+    }
+    .card-side-tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: #fff;
+    }
+    .card-cell.back .card-side-tag {
+      background: var(--accent-alt);
+    }
+    .card-text {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+      max-height: 220px;
+      overflow: auto;
+    }
+    .card-text:empty {
+      display: none;
+    }
+    .canvas-wrapper {
+      position: relative;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+    .card-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .empty-state {
+      border: 1px dashed var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.6);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="nav-links">
+        <a class="btn" href="index.html">← Home</a>
+        <a class="btn" href="manage.html">Sets</a>
+      </div>
+      <div class="set-meta">
+        <h1>Cards overview</h1>
+        <div class="muted">Current set: <span id="setName">Default</span></div>
+      </div>
+      <div class="nav-links">
+        <a class="btn" id="editLink" href="editor.html">✏️ Edit</a>
+        <a class="btn" id="rehearseLink" href="rehearse.html">📖 Rehearse</a>
+        <button class="btn" id="changeSet">Change set</button>
+      </div>
+    </div>
+
+    <section class="cards-section">
+      <header>
+        <h2 id="cardCount">Cards</h2>
+      </header>
+      <div id="emptyState" class="empty-state" hidden>No cards yet. Create or draw cards in the editor to see them listed here.</div>
+      <div id="cardsGrid" class="cards-grid"></div>
+    </section>
+  </div>
+
+  <script>
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      const requestedSet = params.get('set');
+      const setNameEl = document.getElementById('setName');
+      const cardCountEl = document.getElementById('cardCount');
+      const cardsGrid = document.getElementById('cardsGrid');
+      const emptyState = document.getElementById('emptyState');
+      const editLink = document.getElementById('editLink');
+      const rehearseLink = document.getElementById('rehearseLink');
+      const changeSetBtn = document.getElementById('changeSet');
+
+      const BASE_WIDTH = 1200;
+      const BASE_HEIGHT = 800;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const rootStyles = getComputedStyle(document.documentElement);
+      const canvasBackground = (rootStyles.getPropertyValue('--surface') || '#ffffff').trim() || '#ffffff';
+
+      async function resolveSetId() {
+        if (!window.SetsAPI) return 'default';
+        let sets = [];
+        try {
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error('Unable to load sets', err);
+        }
+        if (!sets.length) {
+          const created = await SetsAPI.createSet('Default');
+          sets = [created];
+        }
+        let active = requestedSet;
+        if (!active || !sets.some((s) => s.id === active)) {
+          active = sets[sets.length - 1].id;
+        }
+        if (active !== requestedSet) {
+          params.set('set', active);
+          const url = new URL(location.href);
+          url.search = params.toString();
+          history.replaceState({}, '', url.toString());
+        }
+        return active;
+      }
+
+      let activeSetId = await resolveSetId();
+      let deck = [];
+
+      function formatText(text) {
+        if (!text) return '';
+        return String(text)
+          .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\r?\n/g, '<br>');
+    }
+
+    function extractText(card, sideName) {
+      if (!card) return '';
+      const key = sideName === 'front' ? 'front' : 'back';
+      const altKeys = [
+        `${key}Text`, `${key}Html`, `${key}HTML`, `${key}Content`, `${key}Notes`
+      ];
+      for (const k of altKeys) {
+        const value = card[k];
+        if (typeof value === 'string' && value.trim()) return value;
+      }
+      const textObj = card.text;
+      if (textObj && typeof textObj[key] === 'string' && textObj[key].trim()) {
+        return textObj[key];
+      }
+      const side = card[key];
+      if (side && typeof side.text === 'string' && side.text.trim()) {
+        return side.text;
+      }
+      if (side && typeof side.html === 'string' && side.html.trim()) {
+        return side.html;
+      }
+      return '';
+    }
+
+    function drawSideToCanvas(side, ctx) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+      ctx.fillStyle = canvasBackground || '#ffffff';
+      ctx.fillRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+      if (!side) return;
+
+      if (Array.isArray(side.images)) {
+        for (const im of side.images) {
+          if (!im || !im.__image) continue;
+          const angle = typeof im.angle === 'number' ? im.angle : Number(im.angle) || 0;
+          const scale = typeof im.scale === 'number' ? im.scale : Number(im.scale) || 100;
+          const baseWidth = typeof im.w === 'number' ? im.w : Number(im.w) || im.__image.naturalWidth || 0;
+          const baseHeight = typeof im.h === 'number' ? im.h : Number(im.h) || im.__image.naturalHeight || 0;
+          const width = baseWidth * (scale / 100);
+          const height = baseHeight * (scale / 100);
+          const posX = typeof im.x === 'number' ? im.x : Number(im.x) || 0;
+          const posY = typeof im.y === 'number' ? im.y : Number(im.y) || 0;
+          const cx = posX + width / 2;
+          const cy = posY + height / 2;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(angle * Math.PI / 180);
+          ctx.drawImage(im.__image, -width / 2, -height / 2, width, height);
+          ctx.restore();
+        }
+      }
+
+      if (Array.isArray(side.strokes)) {
+        for (const stroke of side.strokes) {
+          if (!stroke || !Array.isArray(stroke.points) || !stroke.points.length) continue;
+          ctx.save();
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.globalCompositeOperation = stroke.mode || 'source-over';
+          ctx.strokeStyle = stroke.color || 'rgba(12,18,28,1)';
+          const lineWidth = typeof stroke.size === 'number' ? stroke.size : Number(stroke.size) || 2;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          stroke.points.forEach((pt, idx) => {
+            const x = typeof pt.x === 'number' ? pt.x : Number(pt.x) || 0;
+            const y = typeof pt.y === 'number' ? pt.y : Number(pt.y) || 0;
+            if (idx === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          });
+          if (stroke.mode === 'destination-out') {
+            ctx.strokeStyle = 'rgba(0,0,0,1)';
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    }
+
+    function createCardCell(card, sideName, index) {
+      const side = card && card[sideName] ? card[sideName] : { strokes: [], images: [] };
+      const cell = document.createElement('div');
+      cell.className = `card-cell ${sideName}`;
+
+      const header = document.createElement('div');
+      header.className = 'card-cell-header';
+      const title = document.createElement('span');
+      title.textContent = `Card ${index + 1}`;
+      const tag = document.createElement('span');
+      tag.className = 'card-side-tag';
+      tag.textContent = sideName === 'front' ? 'Front' : 'Back';
+      header.appendChild(title);
+      header.appendChild(tag);
+      cell.appendChild(header);
+
+      const textContent = extractText(card, sideName);
+      if (textContent) {
+        const textBox = document.createElement('div');
+        textBox.className = 'card-text';
+        textBox.innerHTML = formatText(textContent);
+        cell.appendChild(textBox);
+      }
+
+      const canvasWrap = document.createElement('div');
+      canvasWrap.className = 'canvas-wrapper';
+      const canvas = document.createElement('canvas');
+      canvas.className = 'card-canvas';
+      canvas.width = Math.round(BASE_WIDTH * dpr);
+      canvas.height = Math.round(BASE_HEIGHT * dpr);
+      canvasWrap.appendChild(canvas);
+      cell.appendChild(canvasWrap);
+
+      const ctx = canvas.getContext('2d');
+      drawSideToCanvas(side, ctx);
+
+      if (Array.isArray(side.images)) {
+        for (const im of side.images) {
+          if (im && !im.__image && im.src) {
+            const img = new Image();
+            img.onload = () => {
+              im.__image = img;
+              drawSideToCanvas(side, ctx);
+            };
+            img.src = im.src;
+          }
+        }
+      }
+
+      if ((!textContent || !textContent.trim()) && (!Array.isArray(side.strokes) || side.strokes.length === 0) && (!Array.isArray(side.images) || side.images.length === 0)) {
+        const emptyHint = document.createElement('div');
+        emptyHint.className = 'muted';
+        emptyHint.textContent = 'No content on this side yet.';
+        cell.appendChild(emptyHint);
+      }
+
+      return cell;
+    }
+
+      function renderDeckData(list) {
+        cardsGrid.innerHTML = '';
+        if (!list.length) {
+          emptyState.hidden = false;
+          cardsGrid.hidden = true;
+          cardCountEl.textContent = 'Cards';
+          return;
+        }
+        emptyState.hidden = true;
+        cardsGrid.hidden = false;
+        cardCountEl.textContent = `Cards (${list.length})`;
+        list.forEach((card, idx) => {
+          cardsGrid.appendChild(createCardCell(card, 'front', idx));
+          cardsGrid.appendChild(createCardCell(card, 'back', idx));
+        });
+      }
+
+      async function refreshLinks() {
+        const encoded = encodeURIComponent(activeSetId);
+        editLink.href = `editor.html?set=${encoded}`;
+        rehearseLink.href = `rehearse.html?set=${encoded}`;
+        if (window.SetsAPI) {
+          try {
+            setNameEl.textContent = await SetsAPI.getSetName(activeSetId);
+          } catch (err) {
+            console.error(err);
+            setNameEl.textContent = activeSetId;
+          }
+        } else {
+          setNameEl.textContent = activeSetId;
+        }
+      }
+
+      async function loadDeckForSet() {
+        if (!window.SetsAPI) {
+          const candidates = [
+            `study_deck_sync_v1__${activeSetId}`,
+            `study_deck_v2__${activeSetId}`
+          ];
+          let raw = null;
+          for (const key of candidates) {
+            const val = localStorage.getItem(key);
+            if (val != null) {
+              raw = val;
+              break;
+            }
+          }
+          try {
+            deck = raw ? JSON.parse(raw) || [] : [];
+          } catch {
+            deck = [];
+          }
+        } else {
+          try {
+            deck = await SetsAPI.loadDeck(activeSetId);
+          } catch (err) {
+            console.error('Failed to load deck', err);
+            deck = [];
+          }
+        }
+        deck = Array.isArray(deck) ? deck : [];
+        renderDeckData(deck);
+      }
+
+      async function chooseSet() {
+        if (!window.SetsAPI) return;
+        let sets = [];
+        try {
+          sets = await SetsAPI.loadSets();
+        } catch (err) {
+          console.error(err);
+        }
+        if (!sets.length) {
+          alert('No sets available.');
+          return;
+        }
+        const options = sets.map((s) => `${s.name} (${s.id})`).join('\n');
+        const pick = prompt('Type a set id to open:\n' + options, activeSetId);
+        if (!pick) return;
+        const trimmed = pick.trim();
+        if (!trimmed) return;
+        if (!sets.some((s) => s.id === trimmed)) {
+          alert('Set not found.');
+          return;
+        }
+        activeSetId = trimmed;
+        params.set('set', activeSetId);
+        const url = new URL(location.href);
+        url.search = params.toString();
+        history.replaceState({}, '', url.toString());
+        await refreshLinks();
+        await loadDeckForSet();
+      }
+
+      changeSetBtn.addEventListener('click', chooseSet);
+
+      await refreshLinks();
+      await loadDeckForSet();
+    })();
+  </script>
+</body>
+</html>
