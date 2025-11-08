@@ -10,11 +10,11 @@
     .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
     header { display:flex; align-items:center; justify-content:space-between; padding: 16px 0; }
     .list { display:grid; gap:12px; }
-    .row { display:flex; gap:10px; align-items:center; justify-content:space-between; border:1px solid var(--border); background:#0f1420; border-radius:12px; padding:12px; }
+    .row { display:flex; gap:10px; align-items:center; justify-content:space-between; border:1px solid var(--border); background:var(--surface); box-shadow:var(--shadow-sm); border-radius:12px; padding:12px; }
     .row-name { display:flex; gap:10px; align-items:center; }
     .muted { color: var(--muted); }
-    .btn { background:#1a2030; color:var(--text); border:1px solid var(--border); padding:8px 10px; border-radius:10px; text-decoration:none; }
-    .btn:hover { transform: translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,0.25); }
+    .btn { padding:8px 10px; border-radius:10px; text-decoration:none; }
+    .btn:hover { transform: translateY(-1px); box-shadow:var(--shadow-sm); }
     .row .actions { display:flex; gap:8px; flex-wrap:wrap; }
     .top-actions { display:flex; gap:8px; margin-bottom: 12px; flex-wrap: wrap; }
     input[type="file"] { display:none; }

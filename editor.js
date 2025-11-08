@@ -70,9 +70,9 @@
   }
   function degToRad(d) { return d * Math.PI / 180; }
 
-  const BG_COLOR = '#0b0f15';
-  const GRID_COLOR = 'rgba(122,162,247,0.12)';
-  const GUIDE_COLOR = 'rgba(160,170,190,0.35)';
+  const BG_COLOR = '#f6f8ff';
+  const GRID_COLOR = 'rgba(47, 107, 255, 0.14)';
+  const GUIDE_COLOR = 'rgba(99, 113, 135, 0.28)';
 
   function drawGrid() {
     const w = grid.width, h = grid.height;
