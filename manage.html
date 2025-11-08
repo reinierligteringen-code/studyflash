@@ -10,11 +10,11 @@
     .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
     header { display:flex; align-items:center; justify-content:space-between; padding: 16px 0; }
     .list { display:grid; gap:12px; }
-    .row { display:flex; gap:10px; align-items:center; justify-content:space-between; border:1px solid var(--border); background:#0f1420; border-radius:12px; padding:12px; }
+    .row { display:flex; gap:10px; align-items:center; justify-content:space-between; border:1px solid var(--border); background:var(--surface); box-shadow:var(--shadow-sm); border-radius:12px; padding:12px; }
     .row-name { display:flex; gap:10px; align-items:center; }
     .muted { color: var(--muted); }
-    .btn { background:#1a2030; color:var(--text); border:1px solid var(--border); padding:8px 10px; border-radius:10px; text-decoration:none; }
-    .btn:hover { transform: translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,0.25); }
+    .btn { padding:8px 10px; border-radius:10px; text-decoration:none; }
+    .btn:hover { transform: translateY(-1px); box-shadow:var(--shadow-sm); }
     .row .actions { display:flex; gap:8px; flex-wrap:wrap; }
     .top-actions { display:flex; gap:8px; margin-bottom: 12px; flex-wrap: wrap; }
     input[type="file"] { display:none; }
@@ -45,9 +45,15 @@
     const btnImport = document.getElementById('btn-import');
     const btnNew = document.getElementById('btn-new');
 
-    function render() {
-      const sets = SetsAPI.loadSets().sort((a,b)=>a.createdAt-b.createdAt);
+    async function render() {
       listEl.innerHTML = '';
+      let sets = [];
+      try {
+        sets = await SetsAPI.loadSets();
+      } catch (err) {
+        console.error('Failed to load sets', err);
+      }
+      sets = Array.isArray(sets) ? [...sets].sort((a, b) => a.createdAt - b.createdAt) : [];
       for (const s of sets) {
         const row = document.createElement('div');
         row.className = 'row';
@@ -68,32 +74,47 @@
         row.appendChild(actions);
         listEl.appendChild(row);
 
-        actions.querySelector('[data-act="rename"]').onclick = () => {
+        actions.querySelector('[data-act="rename"]').onclick = async () => {
           const n = prompt('New name for this set:', s.name);
-          if (n && n.trim()) { SetsAPI.renameSet(s.id, n.trim()); render(); }
+          if (n && n.trim()) {
+            await SetsAPI.renameSet(s.id, n.trim());
+            await render();
+          }
         };
-        actions.querySelector('[data-act="export"]').onclick = () => {
-          const key = SetsAPI.storageKeyFor(s.id);
-          const data = localStorage.getItem(key) || '[]';
-          const blob = new Blob([data], {type:'application/json'});
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = `${s.name.replace(/\s+/g,'_')}.json`;
-          a.click(); URL.revokeObjectURL(url);
+        actions.querySelector('[data-act="export"]').onclick = async () => {
+          try {
+            const deck = await SetsAPI.loadDeck(s.id);
+            const blob = new Blob([JSON.stringify(deck, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${s.name.replace(/\s+/g,'_')}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch (err) {
+            alert('Could not export this set. Please try again.');
+            console.error(err);
+          }
         };
-        actions.querySelector('[data-act="delete"]').onclick = () => {
-          if (!confirm('Delete this set? This removes its deck from this browser.')) return;
-          SetsAPI.deleteSet(s.id);
-          render();
+        actions.querySelector('[data-act="delete"]').onclick = async () => {
+          if (!confirm('Delete this set? This removes it for all devices.')) return;
+          await SetsAPI.deleteSet(s.id);
+          await render();
         };
       }
     }
 
-    btnNew.onclick = () => {
+    btnNew.onclick = async () => {
       const name = prompt('Name of the new set:', 'New Set');
-      const s = SetsAPI.createSet(name || 'New Set');
-      render();
-      location.href = `editor.html?set=${s.id}`;
+      if (name === null) return;
+      try {
+        const s = await SetsAPI.createSet(name || 'New Set');
+        await render();
+        location.href = `editor.html?set=${s.id}`;
+      } catch (err) {
+        alert('Could not create set.');
+        console.error(err);
+      }
     };
 
     btnImport.onclick = () => fileImport.click();
@@ -101,15 +122,16 @@
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => {
+      reader.onload = async (ev) => {
         try {
           const data = JSON.parse(ev.target.result);
           const name = prompt('Name for imported set:', file.name.replace(/\.json$/i,''));
-          const s = SetsAPI.createSet(name || 'Imported Set');
-          localStorage.setItem(SetsAPI.storageKeyFor(s.id), JSON.stringify(data));
+          const set = await SetsAPI.createSet(name || 'Imported Set');
+          await SetsAPI.saveDeck(set.id, Array.isArray(data) ? data : [data]);
           alert('Imported. Opening editor…');
-          location.href = `editor.html?set=${s.id}`;
+          location.href = `editor.html?set=${set.id}`;
         } catch(err) {
+          console.error(err);
           alert('Import failed: ' + err.message);
         }
       };
