@@ -1,4 +1,389 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Study Cards — Editor v5.1</title></head>
-<body><p>Placeholder for full Apple Pencil–fixed editor.html content.</p></body></html>
+<head>
+  <meta charset="utf-8" />
+  <title>Study Cards — Editor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <style>
+    :root{
+      --toolbar-h:56px;
+      --bg:#f7f7f7;
+      --ink:#111;
+      --ui:#ffffff;
+      --ui2:#e8e8e8;
+      --brand:#0a84ff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif}
+    .toolbar{
+      height:var(--toolbar-h);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      padding:10px 12px;
+      background:var(--ui);
+      border-bottom:1px solid var(--ui2);
+      position:sticky; top:0; z-index:10;
+    }
+    .toolbar .group{display:flex; gap:6px; align-items:center}
+    button{
+      border:1px solid var(--ui2);
+      background:#fff;
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      user-select:none;
+    }
+    button.active{border-color:var(--brand); box-shadow:0 0 0 2px rgba(10,132,255,.15)}
+    button:disabled{opacity:.5; cursor:not-allowed}
+    input[type="range"]{width:140px}
+    .spacer{flex:1}
+    .pad{
+      position:relative;
+      width:100%;
+      height:calc(100vh - var(--toolbar-h));
+      touch-action:none; /* critical for iPad Pencil */
+      -webkit-touch-callout:none;
+      -webkit-user-select:none; user-select:none;
+      background:#fff;
+    }
+    canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+    .note{
+      position:absolute; right:10px; bottom:10px;
+      background:rgba(255,255,255,.8);
+      border:1px solid var(--ui2);
+      padding:6px 8px; border-radius:8px; font-size:12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div class="group">
+      <button id="penBtn" class="active" title="Pen (P)">Pen</button>
+      <button id="eraserBtn" title="Eraser (E)">Eraser</button>
+    </div>
+
+    <div class="group">
+      <label for="size">Size</label>
+      <input id="size" type="range" min="0.5" max="6" step="0.1" value="1.4">
+      <span id="sizeVal">1.4</span> px
+    </div>
+
+    <div class="group">
+      <label for="grid">Grid</label>
+      <input id="grid" type="range" min="10" max="40" step="2" value="24">
+      <span id="gridVal">24</span> px
+      <button id="toggleGrid">Toggle grid</button>
+    </div>
+
+    <div class="group">
+      <button id="undoBtn" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+      <button id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
+      <button id="clearBtn">Clear</button>
+      <button id="saveBtn">Save PNG</button>
+    </div>
+
+    <div class="spacer"></div>
+  </div>
+
+  <div class="pad" id="pad">
+    <!-- Separate canvases: grid (bottom) + drawing (top) -->
+    <canvas id="gridCanvas"></canvas>
+    <canvas id="drawCanvas"></canvas>
+    <div class="note">Tip: P to toggle Pen, E for Eraser. Pressure is supported on Apple Pencil.</div>
+  </div>
+
+  <script>
+    (function(){
+      const pad = document.getElementById('pad');
+      const gridCanvas = document.getElementById('gridCanvas');
+      const drawCanvas = document.getElementById('drawCanvas');
+      const gtx = gridCanvas.getContext('2d');
+      const ctx = drawCanvas.getContext('2d');
+
+      const penBtn = document.getElementById('penBtn');
+      const eraserBtn = document.getElementById('eraserBtn');
+      const sizeInput = document.getElementById('size');
+      const sizeVal = document.getElementById('sizeVal');
+      const gridInput = document.getElementById('grid');
+      const gridVal = document.getElementById('gridVal');
+      const toggleGridBtn = document.getElementById('toggleGrid');
+      const undoBtn = document.getElementById('undoBtn');
+      const redoBtn = document.getElementById('redoBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const saveBtn = document.getElementById('saveBtn');
+
+      let dpr = Math.max(1, window.devicePixelRatio || 1);
+      let mode = 'pen'; // 'pen' | 'eraser'
+      let gridVisible = true;
+
+      // history stacks (ImageData, same size as canvas)
+      let undoStack = [];
+      let redoStack = [];
+
+      function setCanvasSize() {
+        // Size canvases to the CSS size of the pad, then scale by DPR
+        const rect = pad.getBoundingClientRect();
+        dpr = Math.max(1, window.devicePixelRatio || 1);
+
+        for (const c of [gridCanvas, drawCanvas]) {
+          c.style.width = rect.width + 'px';
+          c.style.height = rect.height + 'px';
+          c.width = Math.round(rect.width * dpr);
+          c.height = Math.round(rect.height * dpr);
+        }
+
+        // Use CSS pixel units in drawing commands
+        gtx.setTransform(dpr,0,0,dpr,0,0);
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+
+        drawGrid();     // redraw grid to new size
+        restoreLatest(); // keep current picture if possible
+      }
+
+      function drawGrid() {
+        gtx.clearRect(0,0,gridCanvas.width,gridCanvas.height);
+        if (!gridVisible) return;
+
+        const spacing = Number(gridInput.value);
+        const rect = pad.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+
+        gtx.save();
+        gtx.lineWidth = 1;
+        gtx.strokeStyle = '#e3e3e3';
+
+        // vertical lines
+        gtx.beginPath();
+        for (let x=0.5; x<=w; x+=spacing) {
+          gtx.moveTo(x, 0);
+          gtx.lineTo(x, h);
+        }
+        gtx.stroke();
+
+        // horizontal lines
+        gtx.beginPath();
+        for (let y=0.5; y<=h; y+=spacing) {
+          gtx.moveTo(0, y);
+          gtx.lineTo(w, y);
+        }
+        gtx.stroke();
+
+        gtx.restore();
+      }
+
+      // --- Drawing state ---
+      let isDrawing = false;
+      let last = null; // {x,y}
+      let pathStarted = false;
+
+      function canvasPointFromEvent(e){
+        // Use clientX/Y referenced to canvas rect; this fixes Apple Pencil offsets
+        const r = drawCanvas.getBoundingClientRect();
+        // client coords already account for page scroll & zoom
+        const x = (e.clientX - r.left);
+        const y = (e.clientY - r.top);
+        return {x, y};
+      }
+
+      function startStroke(e){
+        // Only left button or primary touch/pen
+        if (e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+        drawCanvas.setPointerCapture?.(e.pointerId);
+
+        // snapshot for undo (before the stroke)
+        pushUndo();
+
+        isDrawing = true;
+        last = canvasPointFromEvent(e);
+        pathStarted = false;
+        drawPoint(last, e);
+      }
+
+      function continueStroke(e){
+        if (!isDrawing) return;
+        e.preventDefault();
+        const p = canvasPointFromEvent(e);
+        drawSegment(last, p, e);
+        last = p;
+      }
+
+      function endStroke(e){
+        if (!isDrawing) return;
+        e.preventDefault();
+        isDrawing = false;
+        last = null;
+        pathStarted = false;
+        // clear redo stack after a new stroke
+        redoStack.length = 0;
+      }
+
+      function currentSize(e){
+        const base = Number(sizeInput.value);
+        const pressure = (e.pressure && e.pressure > 0) ? e.pressure : 0.6; // nice default for mouse
+        const penScale = 0.9 + pressure * 1.1; // 0.9..2.0x
+        if (mode === 'eraser') return base * 3.2;  // bigger eraser
+        return base * penScale;
+      }
+
+      function configureCtxForMode(e){
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+        ctx.strokeStyle = '#111';
+        if (mode === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+        }
+        ctx.lineWidth = currentSize(e);
+      }
+
+      function drawPoint(p, e){
+        configureCtxForMode(e);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, ctx.lineWidth/2, 0, Math.PI*2);
+        ctx.fillStyle = (mode === 'eraser') ? 'rgba(0,0,0,1)' : '#111';
+        ctx.fill();
+        pathStarted = true;
+      }
+
+      function drawSegment(a, b, e){
+        configureCtxForMode(e);
+        ctx.beginPath();
+        // simple smoothing using quadratic curve to midpoint
+        const midX = (a.x + b.x)/2;
+        const midY = (a.y + b.y)/2;
+        if (!pathStarted){
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          pathStarted = true;
+        } else {
+          ctx.moveTo(a.x, a.y);
+          ctx.quadraticCurveTo(a.x, a.y, midX, midY);
+        }
+        ctx.stroke();
+      }
+
+      // --- History (undo/redo) ---
+      function pushUndo(){
+        try {
+          const img = ctx.getImageData(0,0, drawCanvas.width, drawCanvas.height);
+          undoStack.push(img);
+          // limit memory
+          if (undoStack.length > 40) undoStack.shift();
+        } catch(err) {
+          // Safari may throw if canvas too large; ignore safely.
+        }
+      }
+      function restoreLatest(){
+        if (!undoStack.length) { ctx.clearRect(0,0, drawCanvas.width, drawCanvas.height); return; }
+        try {
+          ctx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
+          // when DPR changes, ImageData size no longer matches; in that case we simply drop history.
+          const last = undoStack[undoStack.length-1];
+          if (last.width === drawCanvas.width && last.height === drawCanvas.height){
+            ctx.putImageData(last, 0, 0);
+          } else {
+            undoStack.length = 0; // reset incompatible history
+          }
+        } catch(err){}
+      }
+      function doUndo(){
+        if (!undoStack.length) return;
+        try {
+          const current = ctx.getImageData(0,0,drawCanvas.width, drawCanvas.height);
+          redoStack.push(current);
+          const prev = undoStack.pop();
+          if (prev){
+            ctx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
+            ctx.putImageData(prev, 0, 0);
+          }
+        } catch(err){}
+      }
+      function doRedo(){
+        if (!redoStack.length) return;
+        try {
+          const current = ctx.getImageData(0,0,drawCanvas.width, drawCanvas.height);
+          undoStack.push(current);
+          const next = redoStack.pop();
+          if (next){
+            ctx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
+            ctx.putImageData(next, 0, 0);
+          }
+        } catch(err){}
+      }
+
+      // --- UI wiring ---
+      penBtn.addEventListener('click', ()=>setMode('pen'));
+      eraserBtn.addEventListener('click', ()=>setMode('eraser'));
+      function setMode(m){
+        mode = m;
+        penBtn.classList.toggle('active', m==='pen');
+        eraserBtn.classList.toggle('active', m==='eraser');
+      }
+
+      sizeInput.addEventListener('input', ()=> sizeVal.textContent = sizeInput.value);
+      gridInput.addEventListener('input', ()=> { gridVal.textContent = gridInput.value; drawGrid(); });
+      toggleGridBtn.addEventListener('click', ()=>{ gridVisible = !gridVisible; drawGrid(); });
+
+      undoBtn.addEventListener('click', doUndo);
+      redoBtn.addEventListener('click', doRedo);
+
+      clearBtn.addEventListener('click', ()=>{
+        pushUndo();
+        ctx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
+        redoStack.length = 0;
+      });
+
+      saveBtn.addEventListener('click', ()=>{
+        // Merge grid + drawing for export if grid visible
+        const rect = pad.getBoundingClientRect();
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = Math.round(rect.width * dpr);
+        exportCanvas.height = Math.round(rect.height * dpr);
+        const ex = exportCanvas.getContext('2d');
+        ex.setTransform(dpr,0,0,dpr,0,0);
+        if (gridVisible) ex.drawImage(gridCanvas, 0,0, exportCanvas.width, exportCanvas.height);
+        ex.drawImage(drawCanvas, 0,0, exportCanvas.width, exportCanvas.height);
+
+        const link = document.createElement('a');
+        link.download = 'flashcard.png';
+        link.href = exportCanvas.toDataURL('image/png');
+        link.click();
+      });
+
+      // keyboard shortcuts
+      window.addEventListener('keydown', (e)=>{
+        if (e.key === 'p' || e.key === 'P') setMode('pen');
+        if (e.key === 'e' || e.key === 'E') setMode('eraser');
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey){ e.preventDefault(); doUndo(); }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey){ e.preventDefault(); doRedo(); }
+      });
+
+      // pointer events (work with Apple Pencil)
+      drawCanvas.addEventListener('pointerdown', startStroke, {passive:false});
+      drawCanvas.addEventListener('pointermove', continueStroke, {passive:false});
+      window.addEventListener('pointerup', endStroke, {passive:false});
+      window.addEventListener('pointercancel', endStroke, {passive:false});
+      window.addEventListener('blur', endStroke);
+
+      // resize handling (orientation/zoom changes on iPad adjust DPR)
+      const ro = new ResizeObserver(setCanvasSize);
+      ro.observe(pad);
+      window.addEventListener('orientationchange', setCanvasSize);
+      window.addEventListener('load', setCanvasSize);
+
+      // Initial UI labels
+      sizeVal.textContent = sizeInput.value;
+      gridVal.textContent = gridInput.value;
+
+      // First blank state for undo
+      setCanvasSize();
+      pushUndo();
+    })();
+  </script>
+</body>
+</html>
