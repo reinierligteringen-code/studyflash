@@ -1,0 +1,6 @@
+front,back,tags,card_type,options,image_path,provenance,notes
+State Cauchy–Schwarz.,For all x,y in R^n: |x·y| ≤ ||x||·||y||.,analysis,basic,,,Week1: Vectors,
+Define complex conjugate.,For z=a+bi, the conjugate is \bar z = a - bi.,complex,basic,,,Week1: Complex numbers,
+Triangle inequality (cloze).,For all vectors x,y: ||x+y|| ≤ ||x|| + ||y||,analysis,cloze,,,,
+What is rational choice?,Maximizing a well-defined objective given constraints.,micro,basic,,,,
+Which is a field?,"Real numbers*, Integers, Even numbers, Natural numbers",algebra,mcq,"["Real numbers*","Integers","Even numbers","Natural numbers"]",,,

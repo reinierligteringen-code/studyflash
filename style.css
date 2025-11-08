@@ -1,0 +1,74 @@
+* { box-sizing: border-box; }
+:root {
+  --bg: #0f1115;
+  --panel: #151922;
+  --text: #e7e9ee;
+  --muted: #9aa3b2;
+  --accent: #7aa2f7;
+  --border: #2a3140;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+  color: var(--text);
+  background: radial-gradient(circle at 20% 0%, #0e1420, #0b0f18 45%, #0a0d14);
+}
+header {
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+  position: sticky; top: 0; z-index: 2;
+}
+header h1 {
+  margin: 0; padding: 12px 16px; font-weight: 700; letter-spacing: 0.3px;
+}
+.toolbar {
+  display: flex; flex-wrap: wrap; gap: 12px; padding: 10px 16px 14px 16px; border-top: 1px solid var(--border);
+}
+.tool-group {
+  display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--border);
+  background: #101520; border-radius: 12px;
+}
+.tool, .side, .card-controls button, .deck-controls button {
+  background: #1a2030; color: var(--text); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 12px; cursor: pointer; transition: 120ms ease;
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+.tool:hover, .side:hover, .card-controls button:hover, .deck-controls button:hover { 
+  transform: translateY(-1px); 
+  box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+}
+.tool.active, .side.active { outline: 2px solid var(--accent); }
+.inline { display:flex; gap:8px; align-items:center; color: var(--muted); }
+.inline input[type="range"] { width: 120px; }
+
+main { display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding: 16px; }
+aside {
+  border-right: 1px solid var(--border);
+  padding-right: 16px;
+}
+.deck-controls, .side-controls, .card-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+#deck-info { color: var(--muted); }
+
+.canvas-wrap {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #0b0f15;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+}
+canvas { display:block; width: 100%; height: auto; }
+#grid { position: absolute; inset: 0; }
+#draw { position: absolute; inset: 0; }
+
+footer { padding: 10px 16px; border-top: 1px solid var(--border); color: var(--muted); }
+
+details.help {
+  margin-top: 12px;
+  background: #0f1420;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+}

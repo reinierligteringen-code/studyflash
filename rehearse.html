@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Study Suite — Rehearse</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="sets.js"></script>
+  <style>
+    .wrap { max-width: 1100px; margin: 16px auto; padding: 0 16px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin: 12px 0; }
+    .btn { background:#1a2030; color:var(--text); border:1px solid var(--border); padding:10px 12px; border-radius:10px; text-decoration:none; }
+    .btn:hover { transform: translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,0.25); }
+    .muted { color: var(--muted); }
+    .canvas-wrap { position:relative; border:1px solid var(--border); border-radius:16px; overflow:hidden; background:#0b0f15; margin-top:10px; }
+    canvas { display:block; width:100%; height:auto; }
+    #grid { position:absolute; inset:0; }
+    #view { position:absolute; inset:0; }
+    .controls { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <a class="btn" href="index.html">← Home</a>
+        <a class="btn" href="manage.html">Sets</a>
+      </div>
+      <div>
+        <strong id="set-name">(set)</strong> <span class="muted">|</span> <span id="progress">1 / 1</span>
+      </div>
+      <div></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="btn-pick-set">Pick Set</button>
+      <button class="btn" id="btn-prev">◀ Prev</button>
+      <button class="btn" id="btn-flip">Flip</button>
+      <button class="btn" id="btn-next">Next ▶</button>
+      <button class="btn" id="btn-shuffle">Shuffle</button>
+      <button class="btn" id="btn-edit">Edit this Set</button>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="grid" width="1200" height="800"></canvas>
+      <canvas id="view" width="1200" height="800"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    let setId = params.get('set') || 'default';
+    const STORAGE_KEY = () => SetsAPI.storageKeyFor(setId);
+
+    const grid = document.getElementById('grid');
+    const view = document.getElementById('view');
+    const g = grid.getContext('2d');
+    const v = view.getContext('2d');
+
+    const setNameEl = document.getElementById('set-name');
+    const progressEl = document.getElementById('progress');
+
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const btnFlip = document.getElementById('btn-flip');
+    const btnShuffle = document.getElementById('btn-shuffle');
+    const btnEdit = document.getElementById('btn-edit');
+    const btnPick = document.getElementById('btn-pick-set');
+
+    let deck = [];
+    let index = 0;
+    let side = 'front';
+
+    function drawGrid() {
+      const w = grid.width, h = grid.height;
+      g.clearRect(0,0,w,h);
+      g.fillStyle = '#0b0f15'; g.fillRect(0,0,w,h);
+      const GRID = 24;
+      g.strokeStyle = 'rgba(122,162,247,0.12)'; g.lineWidth = 1; g.beginPath();
+      for (let x=0; x<=w; x+=GRID) { g.moveTo(x+0.5,0); g.lineTo(x+0.5,h); }
+      for (let y=0; y<=h; y+=GRID) { g.moveTo(0,y+0.5); g.lineTo(w,y+0.5); }
+      g.stroke();
+      g.strokeStyle = 'rgba(160,170,190,0.35)'; g.lineWidth = 2; g.strokeRect(8.5,8.5,w-17,h-17);
+    }
+
+    function render() {
+      v.clearRect(0,0,view.width, view.height);
+      if (!deck.length) return;
+      const card = deck[index];
+      const content = card[side];
+      // images
+      for (const img of content.images) {
+        if (!img.__image) continue;
+        const a = (typeof img.angle === 'number') ? img.angle : 0;
+        const w = img.w * (img.scale/100);
+        const h = img.h * (img.scale/100);
+        const cx = img.x + w/2, cy = img.y + h/2;
+        v.save(); v.translate(cx, cy); v.rotate(a * Math.PI/180);
+        v.drawImage(img.__image, -w/2, -h/2, w, h); v.restore();
+      }
+      // strokes
+      for (const s of content.strokes) {
+        v.save();
+        v.lineJoin = 'round'; v.lineCap = 'round';
+        v.globalCompositeOperation = s.mode || 'source-over';
+        v.strokeStyle = s.color || '#e7e9ee';
+        v.lineWidth = s.size || 2;
+        v.beginPath();
+        for (let i=0;i<s.points.length;i++) {
+          const p = s.points[i];
+          if (i===0) v.moveTo(p.x, p.y); else v.lineTo(p.x, p.y);
+        }
+        v.stroke();
+        v.restore();
+      }
+      progressEl.textContent = `${index+1} / ${deck.length} — ${side}`;
+      setNameEl.textContent = SetsAPI.getSetName(setId);
+    }
+
+    function attachImages() {
+      for (const card of deck) {
+        for (const sideName of ['front','back']) {
+          for (const im of card[sideName].images) {
+            const img = new Image();
+            img.onload = () => { im.__image = img; render(); };
+            img.src = im.src;
+          }
+        }
+      }
+    }
+
+    function loadDeck() {
+      const raw = localStorage.getItem(STORAGE_KEY());
+      deck = [];
+      if (raw) {
+        try { deck = JSON.parse(raw) || []; } catch(e) { deck = []; }
+      }
+      if (!Array.isArray(deck) || deck.length === 0) {
+        deck = [{ front:{strokes:[],images:[]}, back:{strokes:[],images:[]}, createdAt: Date.now() }];
+        localStorage.setItem(STORAGE_KEY(), JSON.stringify(deck));
+      }
+      index = 0; side = 'front';
+      attachImages();
+      render();
+    }
+
+    btnPrev.onclick = () => { if (index>0) { index--; side='front'; render(); } };
+    btnNext.onclick = () => { if (index<deck.length-1) { index++; side='front'; render(); } };
+    btnFlip.onclick = () => { side = (side==='front'?'back':'front'); render(); };
+    btnShuffle.onclick = () => {
+      deck.sort(() => Math.random() - 0.5); index = 0; side='front'; render();
+    };
+    btnEdit.onclick = () => { location.href = `editor.html?set=${setId}`; };
+    btnPick.onclick = () => {
+      const sets = SetsAPI.loadSets();
+      const names = sets.map(s=>`${s.name} (${s.id})`).join('\n');
+      const pick = prompt('Type a set id to open:\n' + names, setId);
+      if (!pick) return;
+      setId = pick.trim();
+      loadDeck();
+      history.replaceState({}, '', `rehearse.html?set=${setId}`);
+    };
+
+    drawGrid();
+    loadDeck();
+  </script>
+</body>
+</html>

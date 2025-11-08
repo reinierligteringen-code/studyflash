@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Study Suite — Manage Sets</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="sets.js"></script>
+  <style>
+    .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+    header { display:flex; align-items:center; justify-content:space-between; padding: 16px 0; }
+    .list { display:grid; gap:12px; }
+    .row { display:flex; gap:10px; align-items:center; justify-content:space-between; border:1px solid var(--border); background:#0f1420; border-radius:12px; padding:12px; }
+    .row-name { display:flex; gap:10px; align-items:center; }
+    .muted { color: var(--muted); }
+    .btn { background:#1a2030; color:var(--text); border:1px solid var(--border); padding:8px 10px; border-radius:10px; text-decoration:none; }
+    .btn:hover { transform: translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,0.25); }
+    .row .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .top-actions { display:flex; gap:8px; margin-bottom: 12px; flex-wrap: wrap; }
+    input[type="file"] { display:none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <a class="btn" href="index.html">← Home</a>
+      </div>
+      <h1>Manage Flashcard Sets</h1>
+      <div></div>
+    </header>
+
+    <div class="top-actions">
+      <button class="btn" id="btn-new">➕ New Set</button>
+      <button class="btn" id="btn-import">⬆️ Import Set (JSON)</button>
+      <input id="file-import" type="file" accept="application/json"/>
+    </div>
+
+    <div id="list" class="list"></div>
+  </div>
+
+  <script>
+    const listEl = document.getElementById('list');
+    const fileImport = document.getElementById('file-import');
+    const btnImport = document.getElementById('btn-import');
+    const btnNew = document.getElementById('btn-new');
+
+    function render() {
+      const sets = SetsAPI.loadSets().sort((a,b)=>a.createdAt-b.createdAt);
+      listEl.innerHTML = '';
+      for (const s of sets) {
+        const row = document.createElement('div');
+        row.className = 'row';
+        const name = document.createElement('div');
+        name.className = 'row-name';
+        name.innerHTML = `<strong>${s.name}</strong> <span class="muted">(${s.id})</span>`;
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+        actions.innerHTML = `
+          <a class="btn" href="editor.html?set=${s.id}">✏️ Edit</a>
+          <a class="btn" href="rehearse.html?set=${s.id}">📖 Rehearse</a>
+          <button class="btn" data-act="rename">✎ Rename</button>
+          <button class="btn" data-act="export">⬇️ Export</button>
+          <button class="btn" data-act="delete">🗑️ Delete</button>
+        `;
+        row.appendChild(name);
+        row.appendChild(actions);
+        listEl.appendChild(row);
+
+        actions.querySelector('[data-act="rename"]').onclick = () => {
+          const n = prompt('New name for this set:', s.name);
+          if (n && n.trim()) { SetsAPI.renameSet(s.id, n.trim()); render(); }
+        };
+        actions.querySelector('[data-act="export"]').onclick = () => {
+          const key = SetsAPI.storageKeyFor(s.id);
+          const data = localStorage.getItem(key) || '[]';
+          const blob = new Blob([data], {type:'application/json'});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `${s.name.replace(/\s+/g,'_')}.json`;
+          a.click(); URL.revokeObjectURL(url);
+        };
+        actions.querySelector('[data-act="delete"]').onclick = () => {
+          if (!confirm('Delete this set? This removes its deck from this browser.')) return;
+          SetsAPI.deleteSet(s.id);
+          render();
+        };
+      }
+    }
+
+    btnNew.onclick = () => {
+      const name = prompt('Name of the new set:', 'New Set');
+      const s = SetsAPI.createSet(name || 'New Set');
+      render();
+      location.href = `editor.html?set=${s.id}`;
+    };
+
+    btnImport.onclick = () => fileImport.click();
+    fileImport.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          const name = prompt('Name for imported set:', file.name.replace(/\.json$/i,''));
+          const s = SetsAPI.createSet(name || 'Imported Set');
+          localStorage.setItem(SetsAPI.storageKeyFor(s.id), JSON.stringify(data));
+          alert('Imported. Opening editor…');
+          location.href = `editor.html?set=${s.id}`;
+        } catch(err) {
+          alert('Import failed: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    render();
+  </script>
+</body>
+</html>

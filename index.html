@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Study Suite — Home</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .home-wrap { max-width: 980px; margin: 40px auto; padding: 0 16px; }
+    .hero { padding: 24px; border:1px solid var(--border); background:#101520; border-radius:18px; }
+    .hero h1 { margin: 0 0 8px 0; }
+    .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top:18px; }
+    .card { padding:18px; border:1px solid var(--border); background:#0f1420; border-radius:16px; }
+    .card h2 { margin:0 0 6px 0; font-size:1.1rem; }
+    .card p { color: var(--muted); min-height: 44px; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .btn { background:#1a2030; color:var(--text); border:1px solid var(--border); padding:10px 12px; border-radius:10px; text-decoration:none; display:inline-block; }
+    .btn:hover { transform: translateY(-1px); box-shadow:0 8px 18px rgba(0,0,0,0.25); }
+  </style>
+</head>
+<body>
+  <div class="home-wrap">
+    <div class="hero">
+      <h1>Study Suite</h1>
+      <p class="muted">Choose what you want to do.</p>
+      <div class="grid">
+        <div class="card">
+          <h2>Rehearse</h2>
+          <p>Practice a flashcard set with flip/next/prev and shuffle.</p>
+          <div class="actions">
+            <a class="btn" href="rehearse.html">Open Rehearsing</a>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Create & Manage Sets</h2>
+          <p>Create new sets, rename, delete, import/export, or open a set.</p>
+          <div class="actions">
+            <a class="btn" href="manage.html">Open Set Manager</a>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Edit Flashcards</h2>
+          <p>Open the drawing editor for a specific set (pick set on load).</p>
+          <div class="actions">
+            <a class="btn" href="editor.html">Open Editor</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
