@@ -5,6 +5,66 @@
   const LOCAL_DECK_PREFIX = 'study_deck_sync_v1__';
   const LOCAL_PENDING_KEY = 'study_sync_pending_v1';
 
+  const storage = (() => {
+    const memory = new Map();
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return {
+        getItem: (key) => (memory.has(key) ? memory.get(key) : null),
+        setItem: (key, value) => { memory.set(key, String(value)); },
+        removeItem: (key) => { memory.delete(key); }
+      };
+    }
+    let disabled = false;
+    try {
+      const probe = '__storage_probe__';
+      window.localStorage.setItem(probe, '1');
+      window.localStorage.removeItem(probe);
+    } catch (err) {
+      disabled = true;
+    }
+
+    const readMemory = (key) => (memory.has(key) ? memory.get(key) : null);
+
+    function read(key) {
+      if (disabled) return readMemory(key);
+      try {
+        return window.localStorage.getItem(key);
+      } catch (err) {
+        disabled = true;
+        return readMemory(key);
+      }
+    }
+
+    function write(key, value) {
+      const stringValue = String(value);
+      if (disabled) {
+        memory.set(key, stringValue);
+        return;
+      }
+      try {
+        window.localStorage.setItem(key, stringValue);
+      } catch (err) {
+        disabled = true;
+        memory.set(key, stringValue);
+      }
+    } finally {
+      flushActive = false;
+      savePending();
+    }
+
+    function remove(key) {
+      memory.delete(key);
+      if (disabled) return;
+      try {
+        window.localStorage.removeItem(key);
+      } catch (err) {
+        disabled = true;
+      }
+    }
+
+    return { getItem: read, setItem: write, removeItem: remove };
+  })();
+
   function nowTs() {
     return Date.now();
   }
@@ -19,114 +79,17 @@
 
   function apiBase() {
     if (typeof window !== 'undefined') {
-      const override = (window.STUDY_API_BASE || (window.localStorage && window.localStorage.getItem && window.localStorage.getItem('study_api_base')));
+      let override = window.STUDY_API_BASE;
+      if (!override && storage.getItem) {
+        try {
+          override = storage.getItem('study_api_base');
+        } catch (err) {
+          override = null;
+        }
+      }
       if (typeof override === 'string' && override.trim()) {
         return override.replace(/\/$/, '');
       }
-      try {
-        const deck = JSON.parse(raw) || [];
-        if (!Array.isArray(deck) || !deck.length) {
-          return [defaultCard()];
-        }
-        return deck;
-      } catch (err) {
-        return [defaultCard()];
-      }
-    },
-    saveDeck(id, deck) {
-      localStorage.setItem(this.storageKeyFor(id), JSON.stringify(deck));
-    }
-  };
-
-  let setsCache = Local.loadSets();
-  let pendingCache = loadPending();
-  let flushActive = false;
-
-  function loadPending() {
-    const raw = localStorage.getItem(LOCAL_PENDING_KEY);
-    if (!raw) return {};
-    try {
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (err) {
-      console.warn('Unable to parse pending sync cache', err);
-      return {};
-    }
-  }
-
-  function savePending() {
-    try {
-      localStorage.setItem(LOCAL_PENDING_KEY, JSON.stringify(pendingCache));
-    } catch (err) {
-      console.warn('Unable to persist pending sync cache', err);
-    }
-  }
-
-  function ensurePendingEntry(id) {
-    if (!pendingCache[id]) {
-      pendingCache[id] = { id, updatedAt: nowTs() };
-    }
-    return pendingCache[id];
-  }
-
-  function clearPendingField(id, field) {
-    const entry = pendingCache[id];
-    if (!entry) return;
-    delete entry[field];
-    if (!entry.name && !entry.deck) {
-      delete pendingCache[id];
-    } else {
-      entry.updatedAt = nowTs();
-    }
-    savePending();
-  }
-
-  async function flushPending() {
-    if (flushActive) return;
-    if (!Object.keys(pendingCache).length) return;
-    if (typeof fetch !== 'function') return;
-    flushActive = true;
-    try {
-      const entries = Object.values(pendingCache).sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
-      for (const entry of entries) {
-        const { id, name, deck } = entry;
-        const encodedId = encodeURIComponent(id);
-        try {
-          if (deck) {
-            await request(`/sets/${encodedId}/deck`, { method: 'PUT', body: { deck, name } });
-            clearPendingField(id, 'deck');
-          }
-          if (name) {
-            await request(`/sets/${encodedId}`, { method: 'PUT', body: { name } });
-            clearPendingField(id, 'name');
-          }
-        } catch (err) {
-          console.warn('Pending sync failed', id, err);
-          if (err && err.status === 404 && deck) {
-            try {
-              await request('/sets', { method: 'POST', body: { id, name: name || 'New Set', deck } });
-              clearPendingField(id, 'deck');
-              clearPendingField(id, 'name');
-            } catch (createErr) {
-              console.warn('Pending create failed', id, createErr);
-            }
-          }
-        }
-      }
-    } finally {
-      flushActive = false;
-      savePending();
-    }
-  }
-
-  function queuePendingDeck(id, deck, name) {
-    const entry = ensurePendingEntry(id);
-    entry.deck = deck;
-    if (name) entry.name = name;
-    entry.updatedAt = nowTs();
-    savePending();
-    if (typeof navigator === 'undefined' || navigator.onLine !== false) {
-      flushPending();
     }
     return API_BASE;
   }
@@ -154,7 +117,7 @@
     },
     readSets() {
       let sets = [];
-      const raw = localStorage.getItem(LOCAL_SETS_KEY);
+      const raw = storage.getItem(LOCAL_SETS_KEY);
       if (raw) {
         try { sets = JSON.parse(raw) || []; } catch (err) { sets = []; }
       }
@@ -162,9 +125,9 @@
       if (!sets.length) {
         const created = nowTs();
         sets = [{ id: 'default', name: 'Default', createdAt: created, updatedAt: created }];
-        localStorage.setItem(LOCAL_SETS_KEY, JSON.stringify(sets));
-        if (!localStorage.getItem(Local.storageKeyFor('default'))) {
-          localStorage.setItem(Local.storageKeyFor('default'), JSON.stringify([defaultCard()]));
+        storage.setItem(LOCAL_SETS_KEY, JSON.stringify(sets));
+        if (!storage.getItem(Local.storageKeyFor('default'))) {
+          storage.setItem(Local.storageKeyFor('default'), JSON.stringify([defaultCard()]));
         }
       }
       return sets;
@@ -173,7 +136,7 @@
       return this.readSets().map((set) => ({ ...set }));
     },
     saveSets(sets) {
-      localStorage.setItem(LOCAL_SETS_KEY, JSON.stringify(sets));
+      storage.setItem(LOCAL_SETS_KEY, JSON.stringify(sets));
     },
     getSetById(id) {
       return this.readSets().find((set) => set.id === id) || null;
@@ -185,7 +148,7 @@
       const set = { id, name: name || 'New Set', createdAt: created, updatedAt: created };
       sets.push(set);
       this.saveSets(sets);
-      localStorage.setItem(this.storageKeyFor(id), JSON.stringify([defaultCard()]));
+      storage.setItem(this.storageKeyFor(id), JSON.stringify([defaultCard()]));
       return set;
     },
     renameSet(id, name) {
@@ -200,13 +163,13 @@
     deleteSet(id) {
       const sets = this.readSets().filter((set) => set.id !== id);
       this.saveSets(sets);
-      localStorage.removeItem(this.storageKeyFor(id));
+      storage.removeItem(this.storageKeyFor(id));
     },
     loadDeck(id) {
-      const raw = localStorage.getItem(this.storageKeyFor(id));
+      const raw = storage.getItem(this.storageKeyFor(id));
       if (!raw) {
         const deck = [defaultCard()];
-        localStorage.setItem(this.storageKeyFor(id), JSON.stringify(deck));
+        storage.setItem(this.storageKeyFor(id), JSON.stringify(deck));
         return deck;
       }
       try {
@@ -220,7 +183,7 @@
       }
     },
     saveDeck(id, deck) {
-      localStorage.setItem(this.storageKeyFor(id), JSON.stringify(deck));
+      storage.setItem(this.storageKeyFor(id), JSON.stringify(deck));
     }
   };
 
@@ -229,7 +192,7 @@
   let flushActive = false;
 
   function loadPending() {
-    const raw = localStorage.getItem(LOCAL_PENDING_KEY);
+    const raw = storage.getItem(LOCAL_PENDING_KEY);
     if (!raw) return {};
     try {
       const parsed = JSON.parse(raw);
@@ -242,7 +205,7 @@
 
   function savePending() {
     try {
-      localStorage.setItem(LOCAL_PENDING_KEY, JSON.stringify(pendingCache));
+      storage.setItem(LOCAL_PENDING_KEY, JSON.stringify(pendingCache));
     } catch (err) {
       console.warn('Unable to persist pending sync cache', err);
     }
