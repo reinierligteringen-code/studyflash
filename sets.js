@@ -47,6 +47,9 @@
         disabled = true;
         memory.set(key, stringValue);
       }
+    } finally {
+      flushActive = false;
+      savePending();
     }
 
     function remove(key) {
