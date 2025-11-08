@@ -329,7 +329,11 @@
   }
 
   function onPointerUp() {
+    const wasDrawing = state.pointer.down && state.currentStroke && (state.tool === 'pen' || state.tool === 'eraser');
     state.pointer.down = false;
+    if (wasDrawing) {
+      saveDeckLocal();
+    }
     state.currentStroke = null;
   }
 
