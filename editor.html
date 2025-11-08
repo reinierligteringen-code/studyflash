@@ -4,119 +4,63 @@
   <meta charset="utf-8" />
   <title>Study Cards — Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <!-- MathJax for LaTeX rendering -->
   <script>
     window.MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$','$$'], ['\\[','\\]']]
-      },
-      svg: { fontCache: 'global' }
+      tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']]},
+      svg:{fontCache:'global'}
     };
   </script>
   <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
-
   <style>
     :root{
-      --brand:#0a84ff;
-      --ink:#111;
-      --ink-2:#444;
-      --bg:#f7f7fb;
-      --panel:#ffffff;
-      --line:#e7e7ee;
-      --accent:#0a84ff;
-      --ok:#0ea5e9;
-      --warn:#ef4444;
-
-      --toolbar-h:56px;
-      --sidebar-w:420px;
+      --brand:#0a84ff; --ink:#111; --ink-2:#555;
+      --bg:#f6f7fb; --panel:#ffffff; --line:#e7e7ee;
+      --accent:#0a84ff; --warn:#ef4444;
+      --toolbar-h:56px; --sidebar-w:420px;
+      --grid-bg:#e9f1ff;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-
-    .header{
-      position:sticky; top:0; z-index:100;
-      height:56px; display:flex; align-items:center; gap:12px;
-      padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--line);
-    }
-    .header a.back{
-      text-decoration:none; color:var(--ink-2);
-      padding:6px 10px; border:1px solid var(--line); border-radius:10px;
-    }
+    .header{position:sticky;top:0;z-index:100;height:56px;display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+    .header a.back{text-decoration:none;color:var(--ink-2);padding:6px 10px;border:1px solid var(--line);border-radius:10px}
     .header .title{font-weight:600}
-
-    .wrap{
-      height:calc(100vh - 56px);
-      display:grid; grid-template-columns: var(--sidebar-w) 1fr;
-    }
-    @media (max-width: 980px){
-      .wrap{grid-template-columns:1fr; height:auto}
-      .canvasPane{height:70vh}
-    }
-
-    /* Sidebar / Form */
-    .sidebar{
-      overflow:auto; background:var(--panel); border-right:1px solid var(--line);
-      padding:16px 16px 100px;
-    }
+    .wrap{height:calc(100vh - 56px);display:grid;grid-template-columns:var(--sidebar-w) 1fr}
+    @media (max-width:980px){.wrap{grid-template-columns:1fr;height:auto}.canvasPane{height:70vh}}
+    .sidebar{overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:16px 16px 100px}
     .section{margin-bottom:18px}
-    .section h3{margin:0 0 10px 0; font-size:15px}
-    label{display:block; font-size:12px; color:var(--ink-2); margin:10px 0 6px}
-    input[type="text"], textarea{
-      width:100%; border:1px solid var(--line); border-radius:12px; padding:10px 12px;
-      background:#fff; color:var(--ink); resize:vertical;
-    }
+    .section h3{margin:0 0 10px;font-size:15px}
+    label{display:block;font-size:12px;color:var(--ink-2);margin:10px 0 6px}
+    input[type=text],textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;color:var(--ink);resize:vertical}
     textarea{min-height:84px}
-    .preview{
-      border:1px dashed var(--line); background:#fff; border-radius:12px; padding:12px; min-height:72px;
-    }
-    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-    .muted{color:var(--ink-2); font-size:12px}
-
-    /* Buttons */
-    button{
-      border:1px solid var(--line); background:#fff; padding:9px 12px; border-radius:12px;
-      cursor:pointer; user-select:none;
-    }
-    button.primary{border-color:var(--accent); background:var(--accent); color:#fff}
-    button.ghost{background:#fff}
-    button.active{border-color:var(--accent); box-shadow:0 0 0 2px rgba(10,132,255,.15)}
-    button:disabled{opacity:.6; cursor:not-allowed}
-
-    /* Canvas side */
-    .canvasPane{
-      position:relative; background:#fff;
-      height:100%; /* full height when in two-column */
-    }
-    .toolbar{
-      height:var(--toolbar-h);
-      display:flex; gap:10px; align-items:center;
-      padding:10px 12px; background:#fff; border-bottom:1px solid var(--line);
-      position:sticky; top:0; z-index:10;
-    }
-    .toolbar .group{display:flex; gap:6px; align-items:center}
-    input[type="range"]{width:140px}
+    .preview{border:1px dashed var(--line);background:#fff;border-radius:12px;padding:12px;min-height:72px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .muted{color:var(--ink-2);font-size:12px}
+    button{border:1px solid var(--line);background:#fff;padding:9px 12px;border-radius:12px;cursor:pointer;user-select:none}
+    button.primary{border-color:var(--accent);background:var(--accent);color:#fff}
+    button.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(10,132,255,.15)}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    .tag{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12px;margin-right:6px;margin-top:6px}
+    .canvasPane{position:relative;background:#fff;height:100%}
+    .toolbar{height:var(--toolbar-h);display:flex;gap:10px;align-items:center;padding:10px 12px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+    .toolbar .group{display:flex;gap:6px;align-items:center}
+    input[type=range]{width:140px}
     .spacer{flex:1}
-    .pad{position:relative; width:100%; height:calc(100% - var(--toolbar-h)); touch-action:none; background:#fff}
-    canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
-
-    .tag{
-      display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid var(--line);
-      background:#fff; font-size:12px; margin-right:6px; margin-top:6px;
-    }
+    .pad{position:relative;width:100%;height:calc(100% - var(--toolbar-h));touch-action:none;overscroll-behavior:contain;background:var(--grid-bg)}
+    canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+    /* Disable selection/highlight only while drawing */
+    body.drawing, body.drawing *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+    /* Nicer grid contrast on blue bg */
   </style>
 </head>
-
 <body>
   <div class="header">
-    <a class="back" href="./index.html" title="Back to Home">← Home</a>
+    <a class="back" href="./index.html">← Home</a>
     <div class="title">Edit Flashcard</div>
     <div class="spacer"></div>
     <div class="muted">LaTeX supported: <code>$...$</code> or <code>$$...$$</code></div>
   </div>
 
   <div class="wrap">
-    <!-- LEFT: Card form + live preview -->
     <aside class="sidebar">
       <div class="section">
         <label for="title">Title</label>
@@ -126,22 +70,16 @@
       <div class="section">
         <h3>Front (Question)</h3>
         <label for="frontInput">Text (LaTeX allowed)</label>
-        <textarea id="frontInput" placeholder="Type the question… e.g. Show that the MRS equals the price ratio at the interior optimum. Use $U(x,y)=x^\alpha y^{1-\alpha}$."></textarea>
-        <div class="row muted">
-          <span>Preview</span>
-          <span class="tag">Rendered</span>
-        </div>
+        <textarea id="frontInput" placeholder="Type the question… e.g. Show that $MRS=\\frac{p_x}{p_y}$ at an interior optimum."></textarea>
+        <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
         <div id="frontPreview" class="preview"></div>
       </div>
 
       <div class="section">
         <h3>Back (Answer)</h3>
         <label for="backInput">Text (LaTeX allowed)</label>
-        <textarea id="backInput" placeholder="Sketch the steps and result… e.g. $$MRS=\frac{MU_x}{MU_y}=\frac{p_x}{p_y}$$"></textarea>
-        <div class="row muted">
-          <span>Preview</span>
-          <span class="tag">Rendered</span>
-        </div>
+        <textarea id="backInput" placeholder="Sketch the steps and result… e.g. $$MRS=\\frac{MU_x}{MU_y}=\\frac{p_x}{p_y}$$"></textarea>
+        <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
         <div id="backPreview" class="preview"></div>
       </div>
 
@@ -150,20 +88,19 @@
         <div class="row">
           <label class="tag"><input type="radio" name="attachTo" value="front" checked> Front</label>
           <label class="tag"><input type="radio" name="attachTo" value="back"> Back</label>
-          <button id="snapshotBtn" class="ghost">Insert canvas snapshot</button>
-          <button id="clearImgsBtn" class="ghost">Remove all images</button>
+          <button id="snapshotBtn">Insert canvas snapshot</button>
+          <button id="clearImgsBtn">Remove all images</button>
         </div>
-        <div class="muted" style="margin-top:6px">Use the canvas on the right to sketch; click “Insert canvas snapshot” to embed it into the selected side.</div>
+        <div class="muted" style="margin-top:6px">Use the canvas to the right; click “Insert canvas snapshot” to embed it.</div>
       </div>
 
       <div class="section row">
         <button id="saveBtn" class="primary">Save card (JSON)</button>
-        <button id="downloadPNG" class="ghost">Download preview as PNG</button>
-        <button id="clearTextBtn" class="ghost" style="color:var(--warn); border-color:var(--warn)">Clear text</button>
+        <button id="downloadPNG">Download preview as PNG</button>
+        <button id="clearTextBtn" style="color:var(--warn);border-color:var(--warn)">Clear text</button>
       </div>
     </aside>
 
-    <!-- RIGHT: Canvas (Apple Pencil–fixed) -->
     <section class="canvasPane">
       <div class="toolbar">
         <div class="group">
@@ -198,305 +135,241 @@
   </div>
 
   <script>
-    // ======== Left side: LaTeX rendering + snapshot embedding ========
+    // ===== Left: LaTeX previews =====
     const frontInput = document.getElementById('frontInput');
     const backInput  = document.getElementById('backInput');
     const frontPreview = document.getElementById('frontPreview');
     const backPreview  = document.getElementById('backPreview');
-    const titleInput = document.getElementById('title');
+    const titleInput   = document.getElementById('title');
 
-    function render(targetEl, text){
-      // basic newline handling + unsafe HTML neutralized
-      const safe = text
-        .replace(/&/g,'&amp;')
-        .replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;')
-        .replace(/\\n/g,'\n');
-      targetEl.innerHTML = safe.replace(/\n/g,'<br/>');
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        MathJax.typesetPromise([targetEl]).catch(()=>{});
-      }
+    function renderPreview(el, text){
+      const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      el.innerHTML = safe.replace(/\n/g,'<br/>');
+      if (window.MathJax?.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{});
     }
-    function refresh(){
-      render(frontPreview, frontInput.value);
-      render(backPreview, backInput.value);
-    }
+    function refresh(){ renderPreview(frontPreview, frontInput.value); renderPreview(backPreview, backInput.value); }
     frontInput.addEventListener('input', refresh);
     backInput.addEventListener('input', refresh);
     window.addEventListener('load', refresh);
 
-    // Insert canvas snapshot into selected side
     function selectedSide(){ return (document.querySelector('input[name="attachTo"]:checked')||{}).value || 'front'; }
-
     document.getElementById('snapshotBtn').addEventListener('click', ()=>{
-      const dataURL = exportMergedCanvas(); // defined in canvas section
-      const img = new Image(); img.src = dataURL; img.style.maxWidth = '100%'; img.style.marginTop = '8px';
-      if (selectedSide()==='front') frontPreview.appendChild(img);
-      else backPreview.appendChild(img);
+      const url = exportMergedCanvas();
+      const img = new Image(); img.src = url; img.style.maxWidth='100%'; img.style.marginTop='8px';
+      (selectedSide()==='front' ? frontPreview : backPreview).appendChild(img);
     });
-
     document.getElementById('clearImgsBtn').addEventListener('click', ()=>{
-      for (const el of [frontPreview, backPreview]) {
-        [...el.querySelectorAll('img')].forEach(n=>n.remove());
-      }
+      [frontPreview,backPreview].forEach(p=>[...p.querySelectorAll('img')].forEach(n=>n.remove()));
     });
-
-    // Save card JSON (front/back HTML after render text + inline images references)
     document.getElementById('saveBtn').addEventListener('click', ()=>{
-      const card = {
-        title: titleInput.value.trim(),
-        front: frontPreview.innerHTML,
-        back: backPreview.innerHTML,
-        createdAt: new Date().toISOString()
-      };
-      const blob = new Blob([JSON.stringify(card, null, 2)], {type:'application/json'});
-      const a = document.createElement('a');
-      a.download = (card.title ? card.title.replace(/[^\w\-]+/g,'_') : 'flashcard') + '.json';
-      a.href = URL.createObjectURL(blob);
-      a.click();
-      URL.revokeObjectURL(a.href);
+      const card = { title:titleInput.value.trim(), front:frontPreview.innerHTML, back:backPreview.innerHTML, createdAt:new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(card,null,2)], {type:'application/json'});
+      const a = document.createElement('a'); a.download=(card.title||'flashcard').replace(/[^\w\-]+/g,'_')+'.json';
+      a.href=URL.createObjectURL(blob); a.click(); URL.revokeObjectURL(a.href);
     });
-
-    // Download rendered preview (front+back concatenated) as PNG
-    document.getElementById('downloadPNG').addEventListener('click', async ()=>{
-      // Simple: make a canvas and draw each preview as SVG via foreignObject (broadly supported on desktop)
-      const container = document.createElement('div');
-      container.style.width = '800px';
-      container.style.padding = '20px';
-      container.style.fontFamily = 'system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif';
-      container.innerHTML = '<h3>'+ (titleInput.value||'Flashcard') +'</h3>'
-          + '<h4>Front</h4>' + frontPreview.outerHTML
-          + '<h4>Back</h4>' + backPreview.outerHTML;
-
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000">
-        <foreignObject width="100%" height="100%">
-          ${new XMLSerializer().serializeToString(container)}
-        </foreignObject>
-      </svg>`;
-      const blob = new Blob([svg], {type:'image/svg+xml'});
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas');
-        c.width = 800; c.height = 1000;
-        const cx = c.getContext('2d');
-        cx.fillStyle = '#ffffff'; cx.fillRect(0,0,800,1000);
-        cx.drawImage(img,0,0);
-        URL.revokeObjectURL(url);
-        const a = document.createElement('a');
-        a.download = (titleInput.value||'flashcard')+'.png';
-        a.href = c.toDataURL('image/png');
-        a.click();
-      };
-      img.src = url;
+    document.getElementById('downloadPNG').addEventListener('click', ()=>{
+      const c=document.createElement('canvas'); c.width=800; c.height=1000; const cx=c.getContext('2d');
+      cx.fillStyle='#fff'; cx.fillRect(0,0,800,1000);
+      const el=document.createElement('div');
+      el.style.width='800px'; el.style.padding='20px'; el.style.fontFamily='system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif';
+      el.innerHTML='<h3>'+ (titleInput.value||'Flashcard') +'</h3><h4>Front</h4>'+frontPreview.outerHTML+'<h4>Back</h4>'+backPreview.outerHTML;
+      const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000"><foreignObject width="100%" height="100%">${new XMLSerializer().serializeToString(el)}</foreignObject></svg>`;
+      const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'})); const img=new Image();
+      img.onload=()=>{cx.drawImage(img,0,0);URL.revokeObjectURL(url);const a=document.createElement('a');a.download=(titleInput.value||'flashcard')+'.png';a.href=c.toDataURL('image/png');a.click();};
+      img.src=url;
     });
+    document.getElementById('clearTextBtn').addEventListener('click', ()=>{frontInput.value='';backInput.value='';refresh();});
 
-    document.getElementById('clearTextBtn').addEventListener('click', ()=>{
-      frontInput.value = ''; backInput.value = ''; refresh();
-    });
-
-    // ======== Right side: Canvas (Apple Pencil–fixed, grid, undo/redo) ========
+    // ===== Right: Canvas with palm rejection & smooth ink =====
     const pad = document.getElementById('pad');
     const gridCanvas = document.getElementById('gridCanvas');
     const drawCanvas = document.getElementById('drawCanvas');
-    const gtx = gridCanvas.getContext('2d');
-    const ctx = drawCanvas.getContext('2d');
+    const gtx = gridCanvas.getContext('2d', {desynchronized:true});
+    const ctx = drawCanvas.getContext('2d', {desynchronized:true});
 
-    const penBtn = document.getElementById('penBtn');
-    const eraserBtn = document.getElementById('eraserBtn');
-    const sizeInput = document.getElementById('size');
-    const sizeVal = document.getElementById('sizeVal');
-    const gridInput = document.getElementById('grid');
-    const gridVal = document.getElementById('gridVal');
-    const toggleGridBtn = document.getElementById('toggleGrid');
-    const undoBtn = document.getElementById('undoBtn');
-    const redoBtn = document.getElementById('redoBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const exportCanvasBtn = document.getElementById('exportCanvasBtn');
+    const penBtn=document.getElementById('penBtn');
+    const eraserBtn=document.getElementById('eraserBtn');
+    const sizeInputR=document.getElementById('size');
+    const sizeVal=document.getElementById('sizeVal');
+    const gridInput=document.getElementById('grid');
+    const gridVal=document.getElementById('gridVal');
+    const toggleGridBtn=document.getElementById('toggleGrid');
+    const undoBtn=document.getElementById('undoBtn');
+    const redoBtn=document.getElementById('redoBtn');
+    const clearBtn=document.getElementById('clearBtn');
+    const exportCanvasBtn=document.getElementById('exportCanvasBtn');
 
-    let dpr = Math.max(1, window.devicePixelRatio || 1);
-    let mode = 'pen';
-    let gridVisible = true;
+    let dpr = Math.max(1, window.devicePixelRatio||1);
+    let mode='pen', gridVisible=true;
 
-    let undoStack = [];
-    let redoStack = [];
+    // Use canvas snapshots for history (fast)
+    let undoStack=[], redoStack=[];
 
-    function setCanvasSize() {
-      const rect = pad.getBoundingClientRect();
-      dpr = Math.max(1, window.devicePixelRatio || 1);
-
-      for (const c of [gridCanvas, drawCanvas]) {
-        c.style.width = rect.width + 'px';
-        c.style.height = rect.height + 'px';
-        c.width = Math.round(rect.width * dpr);
-        c.height = Math.round(rect.height * dpr);
-      }
+    function setCanvasSize(){
+      const r=pad.getBoundingClientRect();
+      dpr=Math.max(1, window.devicePixelRatio||1);
+      [gridCanvas,drawCanvas].forEach(c=>{
+        c.style.width=r.width+'px'; c.style.height=r.height+'px';
+        c.width=Math.round(r.width*dpr); c.height=Math.round(r.height*dpr);
+      });
       gtx.setTransform(dpr,0,0,dpr,0,0);
       ctx.setTransform(dpr,0,0,dpr,0,0);
       drawGrid();
       restoreLatest();
     }
 
-    function drawGrid() {
+    function drawGrid(){
       gtx.clearRect(0,0,gridCanvas.width,gridCanvas.height);
-      if (!gridVisible) return;
-      const spacing = Number(gridInput.value);
-      const rect = pad.getBoundingClientRect();
-      const w = rect.width, h = rect.height;
-
+      if(!gridVisible) return;
+      const spacing=Number(gridInput.value);
+      const r=pad.getBoundingClientRect(), w=r.width, h=r.height;
+      // faint grid on colored background
       gtx.save();
-      gtx.lineWidth = 1;
-      gtx.strokeStyle = '#e3e3e3';
+      gtx.strokeStyle='rgba(0,0,0,.08)';
+      gtx.lineWidth=1;
       gtx.beginPath();
-      for (let x=0.5; x<=w; x+=spacing) { gtx.moveTo(x,0); gtx.lineTo(x,h); }
-      for (let y=0.5; y<=h; y+=spacing) { gtx.moveTo(0,y); gtx.lineTo(w,y); }
-      gtx.stroke();
-      gtx.restore();
+      for(let x=0.5;x<=w;x+=spacing){gtx.moveTo(x,0);gtx.lineTo(x,h);}
+      for(let y=0.5;y<=h;y+=spacing){gtx.moveTo(0,y);gtx.lineTo(w,y);}
+      gtx.stroke(); gtx.restore();
     }
 
-    let isDrawing = false, last=null, pathStarted=false;
+    // --- Palm rejection / stylus-only drawing ---
+    let isDrawing=false, activePointerId=null, last=null;
 
-    function canvasPointFromEvent(e){
-      const r = drawCanvas.getBoundingClientRect();
-      return { x: (e.clientX - r.left), y: (e.clientY - r.top) };
-    }
-    function startStroke(e){
-      if (e.button !== undefined && e.button !== 0) return;
+    function beginDraw(e){
+      // Only Apple Pencil or mouse (not finger)
+      if (e.pointerType!=='pen' && !(e.pointerType==='mouse' && e.button===0)) return;
       e.preventDefault();
       drawCanvas.setPointerCapture?.(e.pointerId);
+      activePointerId=e.pointerId; isDrawing=true; last=point(e);
       pushUndo();
-      isDrawing = true; last = canvasPointFromEvent(e); pathStarted = false; drawPoint(last, e);
-    }
-    function continueStroke(e){
-      if (!isDrawing) return;
-      e.preventDefault();
-      const p = canvasPointFromEvent(e);
-      drawSegment(last, p, e); last = p;
-    }
-    function endStroke(e){
-      if (!isDrawing) return;
-      e.preventDefault();
-      isDrawing = false; last=null; pathStarted=false; redoStack.length=0;
+      document.body.classList.add('drawing'); // disable text selection while drawing
+      // draw a tiny seed to avoid missing first segment
+      ctx.save(); configureCtx(e); ctx.beginPath(); ctx.arc(last.x,last.y,ctx.lineWidth/2,0,Math.PI*2); ctx.fillStyle=(mode==='eraser')?'#000':'#111'; if(mode==='eraser') ctx.globalCompositeOperation='destination-out'; else ctx.globalCompositeOperation='source-over'; ctx.fill(); ctx.restore();
     }
 
-    function currentSize(e){
-      const base = Number(sizeInput.value);
-      const pressure = (e.pressure && e.pressure>0) ? e.pressure : 0.6;
-      const penScale = 0.9 + pressure*1.1;
-      if (mode==='eraser') return base*3.2;
-      return base*penScale;
+    function moveDraw(e){
+      if(!isDrawing || e.pointerId!==activePointerId) return;
+      e.preventDefault();
+      // Use all coalesced points (smooth continuous line on iPad)
+      const evts = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
+      ctx.save(); configureCtx(e); ctx.beginPath(); ctx.moveTo(last.x,last.y);
+      for(const ce of evts){
+        const p = point(ce);
+        ctx.lineTo(p.x,p.y);
+        last = p;
+      }
+      ctx.stroke(); ctx.restore();
     }
-    function configureCtxForMode(e){
+
+    function endDraw(e){
+      if(!isDrawing || e.pointerId!==activePointerId) return;
+      e.preventDefault();
+      isDrawing=false; activePointerId=null; last=null;
+      redoStack.length=0;
+      document.body.classList.remove('drawing');
+    }
+
+    function point(e){
+      const r=drawCanvas.getBoundingClientRect();
+      return {x:e.clientX - r.left, y:e.clientY - r.top};
+    }
+
+    function sizeFor(e){
+      const base=Number(sizeInputR.value);
+      const pressure=(e.pressure && e.pressure>0)? e.pressure : 0.6;
+      const scale=(mode==='eraser')?3.2:(0.9+pressure*1.1);
+      return base*scale;
+    }
+
+    function configureCtx(e){
       ctx.lineCap='round'; ctx.lineJoin='round'; ctx.miterLimit=2;
-      if (mode==='eraser'){ ctx.globalCompositeOperation='destination-out'; }
+      ctx.lineWidth = sizeFor(e);
+      if(mode==='eraser'){ ctx.globalCompositeOperation='destination-out'; }
       else { ctx.globalCompositeOperation='source-over'; ctx.strokeStyle='#111'; }
-      ctx.lineWidth = currentSize(e);
-    }
-    function drawPoint(p,e){
-      configureCtxForMode(e);
-      ctx.beginPath(); ctx.arc(p.x,p.y,ctx.lineWidth/2,0,Math.PI*2);
-      ctx.fillStyle = (mode==='eraser') ? 'rgba(0,0,0,1)' : '#111';
-      ctx.fill(); pathStarted=true;
-    }
-    function drawSegment(a,b,e){
-      configureCtxForMode(e);
-      ctx.beginPath();
-      const midX=(a.x+b.x)/2, midY=(a.y+b.y)/2;
-      if (!pathStarted){ ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); pathStarted=true; }
-      else { ctx.moveTo(a.x,a.y); ctx.quadraticCurveTo(a.x,a.y,midX,midY); }
-      ctx.stroke();
     }
 
+    // History using snapshots (fast drawImage)
     function pushUndo(){
       try{
-        const img = ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height);
-        undoStack.push(img); if (undoStack.length>40) undoStack.shift();
+        const snap=document.createElement('canvas');
+        snap.width=drawCanvas.width; snap.height=drawCanvas.height;
+        snap.getContext('2d').drawImage(drawCanvas,0,0);
+        undoStack.push(snap); if(undoStack.length>40) undoStack.shift();
       }catch{}
     }
     function restoreLatest(){
-      if (!undoStack.length){ ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height); return; }
-      try{
-        const last = undoStack[undoStack.length-1];
-        if (last.width===drawCanvas.width && last.height===drawCanvas.height){
-          ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
-          ctx.putImageData(last,0,0);
-        } else { undoStack.length=0; }
-      }catch{}
+      ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+      const last=undoStack[undoStack.length-1];
+      if(last && last.width===drawCanvas.width && last.height===drawCanvas.height){
+        ctx.drawImage(last,0,0);
+      }else if(last){ undoStack.length=0; }
     }
     function doUndo(){
-      if (!undoStack.length) return;
-      try{
-        const cur = ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height);
-        redoStack.push(cur);
-        const prev = undoStack.pop();
-        ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
-        if (prev) ctx.putImageData(prev,0,0);
-      }catch{}
+      if(!undoStack.length) return;
+      const cur=document.createElement('canvas'); cur.width=drawCanvas.width; cur.height=drawCanvas.height; cur.getContext('2d').drawImage(drawCanvas,0,0);
+      redoStack.push(cur);
+      const prev=undoStack.pop();
+      ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+      if(prev) ctx.drawImage(prev,0,0);
     }
     function doRedo(){
-      if (!redoStack.length) return;
-      try{
-        const cur = ctx.getImageData(0,0,drawCanvas.width,drawCanvas.height);
-        undoStack.push(cur);
-        const next = redoStack.pop();
-        ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
-        if (next) ctx.putImageData(next,0,0);
-      }catch{}
+      if(!redoStack.length) return;
+      const cur=document.createElement('canvas'); cur.width=drawCanvas.width; cur.height=drawCanvas.height; cur.getContext('2d').drawImage(drawCanvas,0,0);
+      undoStack.push(cur);
+      const next=redoStack.pop();
+      ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);
+      if(next) ctx.drawImage(next,0,0);
     }
 
-    // Export helpers
+    // Export
     function exportMergedCanvas(){
-      const rect = pad.getBoundingClientRect();
-      const exportCanvas = document.createElement('canvas');
-      exportCanvas.width = Math.round(rect.width * dpr);
-      exportCanvas.height = Math.round(rect.height * dpr);
-      const ex = exportCanvas.getContext('2d');
-      ex.setTransform(dpr,0,0,dpr,0,0);
-      if (gridVisible) ex.drawImage(gridCanvas,0,0,exportCanvas.width,exportCanvas.height);
-      ex.drawImage(drawCanvas,0,0,exportCanvas.width,exportCanvas.height);
-      return exportCanvas.toDataURL('image/png');
+      const r=pad.getBoundingClientRect();
+      const out=document.createElement('canvas');
+      out.width=Math.round(r.width*dpr); out.height=Math.round(r.height*dpr);
+      const ex=out.getContext('2d'); ex.setTransform(dpr,0,0,dpr,0,0);
+      if(gridVisible) ex.drawImage(gridCanvas,0,0,out.width,out.height);
+      ex.drawImage(drawCanvas,0,0,out.width,out.height);
+      return out.toDataURL('image/png');
     }
-    document.getElementById('exportCanvasBtn').addEventListener('click', ()=>{
-      const link = document.createElement('a');
-      link.download = 'canvas.png';
-      link.href = exportMergedCanvas();
-      link.click();
-    });
+    window.exportMergedCanvas = exportMergedCanvas;
+    document.getElementById('exportCanvasBtn').addEventListener('click', ()=>{const a=document.createElement('a');a.download='canvas.png';a.href=exportMergedCanvas();a.click();});
 
     // UI wiring
-    function setMode(m){ mode=m; penBtn.classList.toggle('active',m==='pen'); eraserBtn.classList.toggle('active',m==='eraser'); }
-    penBtn.addEventListener('click', ()=>setMode('pen'));
-    eraserBtn.addEventListener('click', ()=>setMode('eraser'));
-    sizeInput.addEventListener('input', ()=> sizeVal.textContent = sizeInput.value);
-    gridInput.addEventListener('input', ()=>{ gridVal.textContent = gridInput.value; drawGrid(); });
-    toggleGridBtn.addEventListener('click', ()=>{ gridVisible=!gridVisible; drawGrid(); });
-    undoBtn.addEventListener('click', doUndo);
-    redoBtn.addEventListener('click', doRedo);
-    clearBtn.addEventListener('click', ()=>{ pushUndo(); ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height); redoStack.length=0; });
+    function setMode(m){mode=m;penBtn.classList.toggle('active',m==='pen');eraserBtn.classList.toggle('active',m==='eraser');}
+    penBtn.addEventListener('click',()=>setMode('pen'));
+    eraserBtn.addEventListener('click',()=>setMode('eraser'));
+    sizeInputR.addEventListener('input',()=>sizeVal.textContent=sizeInputR.value);
+    gridInput.addEventListener('input',()=>{gridVal.textContent=gridInput.value;drawGrid();});
+    toggleGridBtn.addEventListener('click',()=>{gridVisible=!gridVisible;drawGrid();});
+    undoBtn.addEventListener('click',doUndo);
+    redoBtn.addEventListener('click',doRedo);
+    clearBtn.addEventListener('click',()=>{pushUndo();ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);redoStack.length=0;});
 
-    window.addEventListener('keydown', (e)=>{
-      if (e.key==='p' || e.key==='P') setMode('pen');
-      if (e.key==='e' || e.key==='E') setMode('eraser');
-      if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z' && !e.shiftKey){ e.preventDefault(); doUndo(); }
-      if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z' && e.shiftKey){ e.preventDefault(); doRedo(); }
+    window.addEventListener('keydown',(e)=>{
+      if(e.key==='p'||e.key==='P') setMode('pen');
+      if(e.key==='e'||e.key==='E') setMode('eraser');
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.shiftKey){e.preventDefault();doUndo();}
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&e.shiftKey){e.preventDefault();doRedo();}
     });
 
-    drawCanvas.addEventListener('pointerdown', startStroke, {passive:false});
-    drawCanvas.addEventListener('pointermove', continueStroke, {passive:false});
-    window.addEventListener('pointerup', endStroke, {passive:false});
-    window.addEventListener('pointercancel', endStroke, {passive:false});
-    window.addEventListener('blur', endStroke);
+    // Pointer events (stylus-only)
+    drawCanvas.addEventListener('pointerdown', beginDraw, {passive:false});
+    drawCanvas.addEventListener('pointermove',  moveDraw,  {passive:false});
+    window.addEventListener('pointerup',   endDraw, {passive:false});
+    window.addEventListener('pointercancel',endDraw,{passive:false});
+    window.addEventListener('blur', endDraw);
 
-    const ro = new ResizeObserver(setCanvasSize);
-    ro.observe(pad);
+    // Prevent stray touch events on the pad from doing anything
+    pad.addEventListener('touchstart', e=>e.preventDefault(), {passive:false});
+    pad.addEventListener('touchmove',  e=>e.preventDefault(), {passive:false});
+
+    const ro=new ResizeObserver(setCanvasSize); ro.observe(pad);
     window.addEventListener('orientationchange', setCanvasSize);
     window.addEventListener('load', setCanvasSize);
 
-    sizeVal.textContent = sizeInput.value; gridVal.textContent = gridInput.value;
+    sizeVal.textContent=sizeInputR.value; gridVal.textContent=gridInput.value;
     setCanvasSize(); pushUndo();
-
-    // Expose for snapshot button
-    window.exportMergedCanvas = exportMergedCanvas;
   </script>
 </body>
 </html>
