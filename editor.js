@@ -1,564 +1,842 @@
-/* Study Cards — No OCR, Draw + Images */
-(() => {
+(async () => {
   const params = new URLSearchParams(location.search);
-  const setId = params.get('set') || (function(){
-    const sets = window.SetsAPI ? SetsAPI.loadSets() : [{id:'default',name:'Default'}];
-    return sets[0].id;
-  })();
-  const STORAGE_KEY = 'study_deck_v2__' + setId;
-  const setNameEl = document.getElementById('set-name');
-  if (setNameEl && window.SetsAPI) setNameEl.textContent = SetsAPI.getSetName(setId);
+  let setId = params.get('set');
 
-  const grid = document.getElementById('grid');
-  const draw = document.getElementById('draw');
-  const gctx = grid.getContext('2d');
-  const ctx = draw.getContext('2d');
+  async function ensureSetId() {
+    if (!window.SetsAPI) {
+      return setId || 'default';
+    }
+    let sets = [];
+    try {
+      sets = await SetsAPI.loadSets();
+    } catch (err) {
+      console.error('Unable to load sets', err);
+    }
+    if (!sets.length) {
+      const created = await SetsAPI.createSet('Default');
+      sets = [created];
+    }
+    if (!setId) {
+      setId = sets[sets.length - 1].id;
+      params.set('set', setId);
+      history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+      return setId;
+    }
+    if (!sets.some((s) => s.id === setId)) {
+      setId = sets[sets.length - 1].id;
+      params.set('set', setId);
+      history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+    }
+    return setId;
+  }
 
-  const toolPen = document.getElementById('tool-pen');
-  const toolEraser = document.getElementById('tool-eraser');
-  const toolSelect = document.getElementById('tool-select');
-  const penSize = document.getElementById('pen-size');
-  const eraserSize = document.getElementById('eraser-size');
-  const btnAddImage = document.getElementById('btn-add-image');
-  const imageFile = document.getElementById('image-file');
-  const imageScale = document.getElementById('image-scale');
-  const imageRotate = document.getElementById('image-rotate');
-  const btnRotLeft = document.getElementById('btn-rot-left');
-  const btnRotRight = document.getElementById('btn-rot-right');
+  setId = await ensureSetId();
 
-  const btnUndo = document.getElementById('btn-undo');
-  const btnRedo = document.getElementById('btn-redo');
-  const btnClear = document.getElementById('btn-clear');
-  const btnSavePNG = document.getElementById('btn-save-png');
-  const btnExportDeck = document.getElementById('btn-export-deck');
-  const btnImportDeck = document.getElementById('btn-import-deck');
-  const deckFile = document.getElementById('deck-file');
+  function resolveStorageKeys(id) {
+    const keys = [];
+    if (window.SetsAPI && typeof SetsAPI.storageKeyFor === 'function') {
+      try {
+        const key = SetsAPI.storageKeyFor(id);
+        if (key) keys.push(key);
+      } catch (err) {
+        console.warn('Unable to resolve storage key from SetsAPI', err);
+      }
+    }
+    keys.push(`study_deck_v2__${id}`);
+    keys.push(`study_deck_sync_v1__${id}`);
+    return Array.from(new Set(keys.filter(Boolean)));
+  }
 
-  const btnPrev = document.getElementById('btn-prev');
-  const btnNext = document.getElementById('btn-next');
-  const deckInfo = document.getElementById('deck-info');
+  const STORAGE_KEYS = resolveStorageKeys(setId);
 
-  const btnFront = document.getElementById('btn-front');
-  const btnBack = document.getElementById('btn-back');
+  function writeLocalDeck(deck) {
+    const payload = JSON.stringify(deck);
+    for (const key of STORAGE_KEYS) {
+      try {
+        localStorage.setItem(key, payload);
+      } catch (err) {
+        console.warn('Unable to persist deck locally', err);
+      }
+    }
+  }
 
-  const btnNewCard = document.getElementById('btn-new-card');
-  const btnDuplicateCard = document.getElementById('btn-duplicate-card');
-  const btnDeleteCard = document.getElementById('btn-delete-card');
+  function readLocalDeck() {
+    for (const key of STORAGE_KEYS) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          return parsed;
+        }
+      } catch (err) {
+        console.warn('Unable to parse deck from storage', key, err);
+      }
+    }
+    return null;
+  }
 
-  let state = {
-    tool: 'pen', // 'pen' | 'eraser' | 'select'
-    side: 'front', // 'front' | 'back'
-    deck: [],
-    index: 0,
-    undoStack: [],
-    redoStack: [],
-    pointer: { down:false, x:0, y:0 },
-    currentStroke: null,
-    selectedImageId: null
+  const setNameEl = document.getElementById('setName');
+  if (setNameEl) {
+    if (window.SetsAPI) {
+      try {
+        setNameEl.textContent = await SetsAPI.getSetName(setId);
+      } catch (err) {
+        console.error('Unable to resolve set name', err);
+        setNameEl.textContent = setId;
+      }
+    } else {
+      setNameEl.textContent = setId;
+    }
+  }
+
+  const cardsLink = document.getElementById('cardsLink');
+  if (cardsLink) {
+    cardsLink.href = `cards.html?set=${encodeURIComponent(setId)}`;
+  }
+  const rehearseLink = document.getElementById('rehearseLink');
+  if (rehearseLink) {
+    rehearseLink.href = `rehearse.html?set=${encodeURIComponent(setId)}`;
+  }
+
+  const cardIndexEl = document.getElementById('cardIndex');
+  const prevBtn = document.getElementById('btnPrevCard');
+  const nextBtn = document.getElementById('btnNextCard');
+  const newBtn = document.getElementById('btnNewCard');
+  const duplicateBtn = document.getElementById('btnDuplicateCard');
+  const deleteBtn = document.getElementById('btnDeleteCard');
+  const penBtn = document.getElementById('penBtn');
+  const eraserBtn = document.getElementById('eraserBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+
+  const cardCells = {
+    front: document.querySelector('.card-cell.front'),
+    back: document.querySelector('.card-cell.back')
   };
 
-  const GRID_SIZE = 24;
-
-  function scaledDims(im) {
-    const w = im.w * (im.scale/100);
-    const h = im.h * (im.scale/100);
-    return { w, h };
-  }
-  function centerOf(im) {
-    const { w, h } = scaledDims(im);
-    return { cx: im.x + w/2, cy: im.y + h/2 };
-  }
-  function degToRad(d) { return d * Math.PI / 180; }
-
-  const BG_COLOR = '#0b0f15';
-  const GRID_COLOR = 'rgba(122,162,247,0.12)';
-  const GUIDE_COLOR = 'rgba(160,170,190,0.35)';
-
-  function drawGrid() {
-    const w = grid.width, h = grid.height;
-    gctx.clearRect(0,0,w,h);
-    // background
-    gctx.fillStyle = BG_COLOR;
-    gctx.fillRect(0,0,w,h);
-    // minor grid
-    gctx.strokeStyle = GRID_COLOR;
-    gctx.lineWidth = 1;
-    gctx.beginPath();
-    for (let x = 0; x <= w; x += GRID_SIZE) {
-      gctx.moveTo(x+0.5, 0); gctx.lineTo(x+0.5, h);
-    }
-    for (let y = 0; y <= h; y += GRID_SIZE) {
-      gctx.moveTo(0, y+0.5); gctx.lineTo(w, y+0.5);
-    }
-    gctx.stroke();
-    // outer guide
-    gctx.strokeStyle = GUIDE_COLOR;
-    gctx.lineWidth = 2;
-    gctx.strokeRect(8.5,8.5,w-17,h-17);
-  }
+  const state = {
+    deck: [],
+    index: 0,
+    activeSide: 'front',
+    tool: 'pen',
+    undoStack: [],
+    redoStack: []
+  };
 
   function createEmptySide() {
-    return { strokes: [], images: [] }; // images: { id, x,y,w,h, scale, src }
+    return { strokes: [], images: [] };
   }
 
   function createCard() {
     return { front: createEmptySide(), back: createEmptySide(), createdAt: Date.now() };
   }
 
-  function ensureDeckInit() {
-    // Load deck for current set id
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      try { state.deck = JSON.parse(raw) || [createCard()]; }
-      catch(e) { state.deck = [createCard()]; }
-    } else { state.deck = [createCard()]; }
-  }
-
-  // ORIGINAL ensureDeckInit BELOW (unused)
-  function __unused_ensureDeckInit_v1() {
-    const saved = localStorage.getItem('study_deck_v2');
-    if (saved) {
+  async function loadDeck() {
+    if (window.SetsAPI) {
       try {
-        state.deck = JSON.parse(saved);
-      } catch(e) {
+        const deck = await SetsAPI.loadDeck(setId);
+        if (Array.isArray(deck) && deck.length) {
+          state.deck = deck;
+          writeLocalDeck(deck);
+          return;
+        }
         state.deck = [createCard()];
+        writeLocalDeck(state.deck);
+        await SetsAPI.saveDeck(setId, state.deck);
+        return;
+      } catch (err) {
+        console.error('Unable to load deck from server', err);
       }
-    } else {
-      state.deck = [createCard()];
+    }
+    const localDeck = readLocalDeck();
+    if (localDeck) {
+      state.deck = localDeck;
+      return;
+    }
+    state.deck = [createCard()];
+    writeLocalDeck(state.deck);
+  }
+
+  function snapshotDeck() {
+    return JSON.parse(JSON.stringify(state.deck));
+  }
+
+  let saveTimer = null;
+  let pendingSnapshot = null;
+
+  async function flushSave(snapshot) {
+    if (!window.SetsAPI || !snapshot) return;
+    try {
+      await SetsAPI.saveDeck(setId, snapshot);
+    } catch (err) {
+      console.error('Deck sync failed', err);
     }
   }
 
-  function saveDeckLocal() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.deck));
-  }
-
-  // ORIGINAL saveDeckLocal BELOW (unused)
-  function __unused_saveDeckLocal_v1() {
-    localStorage.setItem('study_deck_v2', JSON.stringify(state.deck));
-  }
-
-  function pushUndo() {
-    const snapshot = JSON.stringify(state.deck[state.index]);
-    state.undoStack.push(snapshot);
-    if (state.undoStack.length > 50) state.undoStack.shift();
-    state.redoStack.length = 0;
-  }
-
-  function applySnapshot(json) {
-    state.deck[state.index] = JSON.parse(json);
-    render();
-    saveDeckLocal();
-  }
-
-  function currentSideData() {
-    const card = state.deck[state.index];
-    return card[state.side];
-  }
-
-  function setTool(which) {
-    state.tool = which;
-    [toolPen, toolEraser, toolSelect].forEach(b => b.classList.remove('active'));
-    if (which === 'pen') toolPen.classList.add('active');
-    if (which === 'eraser') toolEraser.classList.add('active');
-    if (which === 'select') toolSelect.classList.add('active');
-    draw.style.cursor = which === 'select' ? 'move' : 'crosshair';
-    if (which !== 'select') state.selectedImageId = null;
-    render();
-  }
-
-  function setSide(side) {
-    state.side = side;
-    [btnFront, btnBack].forEach(b => b.classList.remove('active'));
-    (side === 'front' ? btnFront : btnBack).classList.add('active');
-    state.selectedImageId = null;
-    render();
-  }
-
-  function setIndex(i) {
-    state.index = i;
-    state.selectedImageId = null;
-    updateDeckInfo();
-    render();
-  }
-
-  function updateDeckInfo() {
-    deckInfo.textContent = `Card ${state.index+1} / ${state.deck.length}`;
-  }
-
-  function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
-
-  function render() {
-    // clear draw layer
-    ctx.clearRect(0,0,draw.width, draw.height);
-
-    const side = currentSideData();
-
-    // images first (with rotation)
-    for (const img of side.images) {
-      if (!img.__image) continue; // not yet loaded
-      const a = (typeof img.angle === 'number') ? img.angle : 0;
-      const { w, h } = scaledDims(img);
-      const { cx, cy } = centerOf(img);
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(degToRad(a));
-      ctx.drawImage(img.__image, -w/2, -h/2, w, h);
-      if (state.selectedImageId === img.id) {
-        ctx.setLineDash([6,6]);
-        ctx.strokeStyle = '#7aa2f7';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(-w/2, -h/2, w, h);
-      }
-      ctx.restore();
+  function saveDeck({ immediate = false } = {}) {
+    const snapshot = snapshotDeck();
+    writeLocalDeck(snapshot);
+    pendingSnapshot = snapshot;
+    if (!window.SetsAPI) return;
+    if (immediate) {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = null;
+      const snap = pendingSnapshot;
+      pendingSnapshot = null;
+      flushSave(snap);
+      return;
     }
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      const snap = pendingSnapshot;
+      pendingSnapshot = null;
+      flushSave(snap);
+    }, 350);
+  }
 
-    // strokes on top
-    for (const s of side.strokes) {
-      ctx.save();
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.globalCompositeOperation = s.mode || 'source-over';
-      ctx.strokeStyle = s.color || '#e7e9ee';
-      ctx.lineWidth = s.size || 2;
-      ctx.beginPath();
-      for (let i=0;i<s.points.length;i++) {
-        const p = s.points[i];
-        if (i===0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
-      }
-      ctx.stroke();
-      ctx.restore();
+  function clampIndex() {
+    if (state.index >= state.deck.length) {
+      state.index = state.deck.length - 1;
+    }
+    if (state.index < 0) {
+      state.index = 0;
     }
   }
 
-  function loadImageToImageObj(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => resolve({ src: e.target.result, w: img.width, h: img.height, __image: img });
-        img.onerror = reject;
-        img.src = e.target.result;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+  function updateCardIndex() {
+    clampIndex();
+    if (cardIndexEl) {
+      cardIndexEl.textContent = `${state.index + 1} / ${state.deck.length}`;
+    }
+  }
+
+  function setActiveSide(side) {
+    state.activeSide = side;
+    Object.entries(cardCells).forEach(([name, el]) => {
+      if (!el) return;
+      el.classList.toggle('active', name === side);
     });
   }
 
-  function hitTestImage(x,y) {
-    const side = currentSideData();
-    for (let i=side.images.length-1; i>=0; i--) {
-      const im = side.images[i];
-      const a = (typeof im.angle === 'number') ? im.angle : 0;
-      const { w, h } = scaledDims(im);
-      const { cx, cy } = centerOf(im);
-      // Transform point to image local space: translate to center, rotate by -a
-      const dx = x - cx, dy = y - cy;
-      const ca = Math.cos(degToRad(-a)), sa = Math.sin(degToRad(-a));
-      const lx = dx * ca - dy * sa;
-      const ly = dx * sa + dy * ca;
-      if (lx >= -w/2 && lx <= w/2 && ly >= -h/2 && ly <= h/2) {
-        return im.id;
+  function pushUndoSnapshot() {
+    const snapshot = JSON.stringify({ deck: state.deck, index: state.index });
+    state.undoStack.push(snapshot);
+    if (state.undoStack.length > 40) {
+      state.undoStack.shift();
+    }
+    state.redoStack.length = 0;
+  }
+
+  function applySnapshot(snapshot) {
+    try {
+      const payload = JSON.parse(snapshot);
+      if (payload && Array.isArray(payload.deck)) {
+        state.deck = payload.deck;
+        state.index = Math.min(Math.max(0, payload.index || 0), state.deck.length - 1);
+        if (!state.deck.length) {
+          state.deck = [createCard()];
+          state.index = 0;
+        }
+        attachImages(state.deck);
+        refresh();
+        saveDeck({ immediate: true });
       }
-    }
-    return null;
-  }
-
-  function pointerPos(evt) {
-    const rect = draw.getBoundingClientRect();
-    const x = (evt.clientX - rect.left) * (draw.width / rect.width);
-    const y = (evt.clientY - rect.top) * (draw.height / rect.height);
-    return { x, y };
-  }
-
-  function onPointerDown(evt) {
-    const {x,y} = pointerPos(evt);
-    state.pointer = { down:true, x, y };
-    const side = currentSideData();
-
-    if (state.tool === 'pen' || state.tool === 'eraser') {
-      pushUndo();
-      const size = state.tool === 'pen' ? Number(penSize.value) : Number(eraserSize.value);
-      const mode = state.tool === 'pen' ? 'source-over' : 'destination-out';
-      state.currentStroke = { points:[{x,y}], size, mode, color:'#e7e9ee' };
-      side.strokes.push(state.currentStroke);
-      render();
-      saveDeckLocal();
-      return;
-    }
-
-    if (state.tool === 'select') {
-      const id = hitTestImage(x,y);
-      state.selectedImageId = id;
-      state.dragOffset = null;
-      if (id) {
-        const im = side.images.find(m => m.id === id);
-        const { w, h } = scaledDims(im);
-        // drag offset from pointer to image top-left (so moving ignores rotation, which is OK for UX)
-        state.dragOffset = { dx: x - im.x, dy: y - im.y, w, h };
-        // sync controls
-        imageScale.value = String(im.scale ?? 100);
-        imageRotate.value = String(im.angle ?? 0);
-      }
-      render();
-      return;
+    } catch (err) {
+      console.error('Unable to restore snapshot', err);
     }
   }
 
-  function onPointerMove(evt) {
-    const {x,y} = pointerPos(evt);
-    if (!state.pointer.down) return;
+  function undo() {
+    if (!state.undoStack.length) return;
+    const current = JSON.stringify({ deck: state.deck, index: state.index });
+    state.redoStack.push(current);
+    const snap = state.undoStack.pop();
+    applySnapshot(snap);
+  }
 
-    if (state.tool === 'pen' || state.tool === 'eraser') {
-      if (state.currentStroke) {
-        state.currentStroke.points.push({x,y});
-        render();
-      }
-      return;
+  function redo() {
+    if (!state.redoStack.length) return;
+    const current = JSON.stringify({ deck: state.deck, index: state.index });
+    state.undoStack.push(current);
+    const snap = state.redoStack.pop();
+    applySnapshot(snap);
+  }
+
+  function duplicateCard() {
+    if (!state.deck.length) return;
+    pushUndoSnapshot();
+    const copy = JSON.parse(JSON.stringify(state.deck[state.index]));
+    copy.createdAt = Date.now();
+    state.deck.splice(state.index + 1, 0, copy);
+    state.index += 1;
+    saveDeck({ immediate: true });
+    refresh();
+  }
+
+  function deleteCard() {
+    if (!state.deck.length) return;
+    pushUndoSnapshot();
+    state.deck.splice(state.index, 1);
+    if (!state.deck.length) {
+      state.deck.push(createCard());
+      state.index = 0;
+    } else if (state.index >= state.deck.length) {
+      state.index = state.deck.length - 1;
     }
+    saveDeck({ immediate: true });
+    refresh();
+  }
 
-    if (state.tool === 'select' && state.selectedImageId && state.dragOffset) {
-      const side = currentSideData();
-      const im = side.images.find(m => m.id === state.selectedImageId);
-      im.x = x - state.dragOffset.dx;
-      im.y = y - state.dragOffset.dy;
-      render();
-      saveDeckLocal();
-      return;
+  function newCard() {
+    pushUndoSnapshot();
+    state.deck.splice(state.index + 1, 0, createCard());
+    state.index += 1;
+    saveDeck({ immediate: true });
+    refresh();
+  }
+
+  function prevCard() {
+    if (state.index > 0) {
+      state.index -= 1;
+      refresh();
     }
   }
 
-  function onPointerUp() {
-    state.pointer.down = false;
-    state.currentStroke = null;
+  function nextCard() {
+    if (state.index < state.deck.length - 1) {
+      state.index += 1;
+      refresh();
+    }
   }
 
-  function addImageFromFile(file) {
-    if (!file) return;
-    loadImageToImageObj(file).then(info => {
-      pushUndo();
-      const side = currentSideData();
-      const id = 'img_' + Math.random().toString(36).slice(2,8);
-      const imgObj = { id, x: 40, y: 40, w: info.w, h: info.h, scale: 50, angle: 0, src: info.src, __image: info.__image };
-      side.images.push(imgObj);
-      state.selectedImageId = id;
-      render();
-      saveDeckLocal();
-    }).catch(err => alert('Could not load image: ' + err));
-  }
-
-  function attachImageBitmaps() {
-    // Ensure data URLs are turned into Image objects after import or load
-    for (const card of state.deck) {
-      for (const sideName of ['front','back']) {
-        for (const im of card[sideName].images) {
-          const img = new Image();
-          img.onload = () => { im.__image = img; render(); };
-          img.src = im.src;
+  function attachImages(deck) {
+    for (const card of deck) {
+      for (const side of ['front', 'back']) {
+        const sideData = card[side];
+        if (!sideData || !Array.isArray(sideData.images)) continue;
+        for (const img of sideData.images) {
+          if (!img || !img.src) continue;
+          const image = new Image();
+          image.onload = () => {
+            img.__image = image;
+            const currentCard = state.deck[state.index];
+            if (currentCard && currentCard[side] === sideData) {
+              pads[side].setContent(sideData);
+            }
+          };
+          image.src = img.src;
         }
       }
     }
   }
 
-  function clearSide() {
-    pushUndo();
-    const side = currentSideData();
-    side.strokes = [];
-    side.images = [];
-    state.selectedImageId = null;
-    render();
-    saveDeckLocal();
+  function midpoint(a, b) {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   }
 
-  function savePNG() {
-    // composite both layers
-    const tmp = document.createElement('canvas');
-    tmp.width = draw.width; tmp.height = draw.height;
-    const c = tmp.getContext('2d');
-    // Re-draw background grid lightly for PNG? Many prefer without grid.
-    // We'll export WITH the grid so it's true to what you see.
-    c.drawImage(grid, 0, 0);
-    c.drawImage(draw, 0, 0);
-    const url = tmp.toDataURL('image/png');
-    const a = document.createElement('a');
-    const idx = String(state.index+1).padStart(3,'0');
-    a.href = url;
-    a.download = `card-${idx}-${state.side}.png`;
-    a.click();
-  }
-
-  function exportDeck() {
-    const data = JSON.stringify(state.deck);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const ts = new Date().toISOString().replace(/[:.]/g,'-');
-    a.href = url;
-    a.download = `deck-${ts}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function importDeckFile(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const deck = JSON.parse(e.target.result);
-        if (!Array.isArray(deck)) throw new Error('Invalid deck format');
-        state.deck = deck;
-        state.index = 0;
-        state.undoStack = [];
-        state.redoStack = [];
-        attachImageBitmaps();
-        updateDeckInfo();
-        render();
-        saveDeckLocal();
-      } catch (err) {
-        alert('Import failed: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function duplicateCard() {
-    const copy = deepClone(state.deck[state.index]);
-    state.deck.splice(state.index+1, 0, copy);
-    setIndex(state.index+1);
-    saveDeckLocal();
-  }
-
-  function deleteCard() {
-    if (state.deck.length === 1) {
-      clearSide();
-      return;
+  class LowPassFilter {
+    constructor(alpha) {
+      this.alpha = alpha;
+      this.initialized = false;
+      this.last = 0;
     }
-    state.deck.splice(state.index, 1);
-    if (state.index >= state.deck.length) state.index = state.deck.length-1;
-    updateDeckInfo();
-    render();
-    saveDeckLocal();
+
+    setAlpha(alpha) {
+      this.alpha = alpha;
+    }
+
+    filter(value) {
+      if (!this.initialized) {
+        this.initialized = true;
+        this.last = value;
+        return value;
+      }
+      const result = this.alpha * value + (1 - this.alpha) * this.last;
+      this.last = result;
+      return result;
+    }
+
+    reset() {
+      this.initialized = false;
+      this.last = 0;
+    }
   }
 
-  function newCard() {
-    state.deck.splice(state.index+1, 0, createCard());
-    setIndex(state.index+1);
-    saveDeckLocal();
+  class OneEuroFilter {
+    constructor({ minCutoff = 1.2, beta = 0.007, dCutoff = 1.0 } = {}) {
+      this.minCutoff = minCutoff;
+      this.beta = beta;
+      this.dCutoff = dCutoff;
+      this.lastTime = null;
+      this.dxFilter = new LowPassFilter(1);
+      this.valueFilter = new LowPassFilter(1);
+    }
+
+    alpha(cutoff, dt) {
+      const tau = 1 / (2 * Math.PI * cutoff);
+      return 1 / (1 + tau / dt);
+    }
+
+    filter(value, timestamp) {
+      if (this.lastTime == null) {
+        this.lastTime = timestamp;
+        this.dxFilter.reset();
+        this.valueFilter.reset();
+        return value;
+      }
+      const dt = Math.max((timestamp - this.lastTime) / 1000, 1e-4);
+      this.lastTime = timestamp;
+      const dx = this.valueFilter.initialized ? (value - this.valueFilter.last) / dt : 0;
+      const aD = this.alpha(this.dCutoff, dt);
+      this.dxFilter.setAlpha(aD);
+      const dxHat = this.dxFilter.filter(dx);
+      const cutoff = this.minCutoff + this.beta * Math.abs(dxHat);
+      const a = this.alpha(cutoff, dt);
+      this.valueFilter.setAlpha(a);
+      return this.valueFilter.filter(value);
+    }
+
+    reset() {
+      this.lastTime = null;
+      this.dxFilter.reset();
+      this.valueFilter.reset();
+    }
   }
 
-  function handleKey(e) {
-    if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); btnUndo.click(); }
-    if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); btnRedo.click(); }
-    if (e.key.toLowerCase() === 'p') setTool('pen');
-    if (e.key.toLowerCase() === 'e') setTool('eraser');
-    if (e.key.toLowerCase() === 'v') setTool('select');
+  function createFilterSet() {
+    return {
+      x: new OneEuroFilter({ minCutoff: 1.2, beta: 0.007, dCutoff: 1.0 }),
+      y: new OneEuroFilter({ minCutoff: 1.2, beta: 0.007, dCutoff: 1.0 })
+    };
   }
 
-  // Wire up events
-  toolPen.addEventListener('click', () => setTool('pen'));
-  toolEraser.addEventListener('click', () => setTool('eraser'));
-  toolSelect.addEventListener('click', () => setTool('select'));
-
-  btnAddImage.addEventListener('click', () => imageFile.click());
-  imageFile.addEventListener('change', e => addImageFromFile(e.target.files[0]));
-  imageScale.addEventListener('input', () => {
-    if (!state.selectedImageId) return;
-    const side = currentSideData();
-    const im = side.images.find(m => m.id === state.selectedImageId);
-    if (!im) return;
-    const { cx, cy } = centerOf(im);
-    im.scale = Number(imageScale.value);
-    const { w, h } = scaledDims(im);
-    im.x = cx - w/2;
-    im.y = cy - h/2;
-    render();
-    saveDeckLocal();
-  });
-  imageRotate.addEventListener('input', () => {
-    if (!state.selectedImageId) return;
-    const side = currentSideData();
-    const im = side.images.find(m => m.id === state.selectedImageId);
-    if (!im) return;
-    im.angle = Number(imageRotate.value);
-    render();
-    saveDeckLocal();
-  });
-
-  function nudgeRotate(delta) {
-    if (!state.selectedImageId) return;
-    const side = currentSideData();
-    const im = side.images.find(m => m.id === state.selectedImageId);
-    if (!im) return;
-    const val = Math.max(-180, Math.min(180, (im.angle ?? 0) + delta));
-    im.angle = val;
-    imageRotate.value = String(val);
-    render();
-    saveDeckLocal();
+  function resolveGridStroke() {
+    const rootStyles = getComputedStyle(document.documentElement);
+    const muted = rootStyles.getPropertyValue('--muted') || '#9fa9c6';
+    const probe = document.createElement('span');
+    probe.style.color = muted;
+    document.body.appendChild(probe);
+    const rgb = getComputedStyle(probe).color.match(/\d+/g);
+    probe.remove();
+    if (rgb && rgb.length >= 3) {
+      return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.2)`;
+    }
+    return 'rgba(159, 169, 198, 0.2)';
   }
-  btnRotLeft.addEventListener('click', () => nudgeRotate(-15));
-  btnRotRight.addEventListener('click', () => nudgeRotate(15));
 
+  class CanvasPad {
+    constructor(side, { container, grid, ink, callbacks, gridStroke }) {
+      this.side = side;
+      this.container = container;
+      this.gridCanvas = grid;
+      this.inkCanvas = ink;
+      this.callbacks = callbacks;
+      this.gridStroke = gridStroke;
+      this.gridCtx = this.gridCanvas.getContext('2d');
+      this.inkCtx = this.inkCanvas.getContext('2d', { desynchronized: true });
+      this.dpr = Math.max(1, window.devicePixelRatio || 1);
+      this.rect = this.container.getBoundingClientRect();
+      this.content = createEmptySide();
+      this.activeStroke = null;
+      this.currentStrokeData = null;
 
-  btnUndo.addEventListener('click', () => {
-    if (!state.undoStack.length) return;
-    const snap = state.undoStack.pop();
-    state.redoStack.push(JSON.stringify(state.deck[state.index]));
-    applySnapshot(snap);
+      this.onPointerDown = this.onPointerDown.bind(this);
+      this.onPointerMove = this.onPointerMove.bind(this);
+      this.onPointerUp = this.onPointerUp.bind(this);
+      this.onBlur = this.onBlur.bind(this);
+
+      this.container.addEventListener('pointerdown', this.onPointerDown, { passive: false });
+      this.container.addEventListener('pointermove', this.onPointerMove, { passive: false });
+      this.container.addEventListener('pointerup', this.onPointerUp, { passive: false });
+      this.container.addEventListener('pointercancel', this.onPointerUp, { passive: false });
+      window.addEventListener('blur', this.onBlur);
+
+      this.resizeObserver = new ResizeObserver(() => this.resize());
+      this.resizeObserver.observe(this.container);
+      window.addEventListener('orientationchange', () => this.resize());
+      window.addEventListener('resize', () => this.resize());
+
+      this.resize();
+    }
+
+    resize() {
+      this.rect = this.container.getBoundingClientRect();
+      this.dpr = Math.max(1, window.devicePixelRatio || 1);
+      const width = Math.max(1, Math.round(this.rect.width * this.dpr));
+      const height = Math.max(1, Math.round(this.rect.height * this.dpr));
+      [this.gridCanvas, this.inkCanvas].forEach((canvas) => {
+        canvas.style.width = `${this.rect.width}px`;
+        canvas.style.height = `${this.rect.height}px`;
+        canvas.width = width;
+        canvas.height = height;
+      });
+      this.gridCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this.inkCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this.drawGrid();
+      this.renderFromContent();
+    }
+
+    drawGrid() {
+      const ctx = this.gridCtx;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, this.gridCanvas.width, this.gridCanvas.height);
+      ctx.restore();
+      ctx.save();
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      const spacing = 24;
+      const w = this.gridCanvas.width / this.dpr;
+      const h = this.gridCanvas.height / this.dpr;
+      ctx.strokeStyle = this.gridStroke;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = spacing; x < w; x += spacing) {
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, h);
+      }
+      for (let y = spacing; y < h; y += spacing) {
+        ctx.moveTo(0, y + 0.5);
+        ctx.lineTo(w, y + 0.5);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    setContent(content) {
+      this.content = content || createEmptySide();
+      this.renderFromContent();
+    }
+
+    renderFromContent() {
+      const ctx = this.inkCtx;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, this.inkCanvas.width, this.inkCanvas.height);
+      ctx.restore();
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      if (!this.content) return;
+
+      if (Array.isArray(this.content.images)) {
+        for (const img of this.content.images) {
+          if (!img || !img.__image) continue;
+          const angle = (typeof img.angle === 'number') ? img.angle : 0;
+          const scale = (img.scale || 100) / 100;
+          const w = (img.w || img.__image.width) * scale;
+          const h = (img.h || img.__image.height) * scale;
+          const cx = (img.x || 0) + w / 2;
+          const cy = (img.y || 0) + h / 2;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate((angle * Math.PI) / 180);
+          ctx.drawImage(img.__image, -w / 2, -h / 2, w, h);
+          ctx.restore();
+        }
+      }
+
+      if (Array.isArray(this.content.strokes)) {
+        for (const stroke of this.content.strokes) {
+          this.drawStoredStroke(stroke);
+        }
+      }
+    }
+
+    drawStoredStroke(stroke) {
+      if (!stroke || !Array.isArray(stroke.points) || !stroke.points.length) return;
+      const ctx = this.inkCtx;
+      ctx.save();
+      ctx.globalCompositeOperation = stroke.mode || 'source-over';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = stroke.mode === 'destination-out' ? 'rgba(0,0,0,1)' : '#111827';
+      ctx.lineWidth = stroke.size || 2.4;
+      if (stroke.points.length === 1) {
+        const p = stroke.points[0];
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fill();
+        ctx.restore();
+        return;
+      }
+      let prev = stroke.points[0];
+      ctx.beginPath();
+      ctx.moveTo(prev.x, prev.y);
+      for (let i = 1; i < stroke.points.length; i++) {
+        const current = stroke.points[i];
+        const mid = midpoint(prev, current);
+        ctx.quadraticCurveTo(prev.x, prev.y, mid.x, mid.y);
+        prev = current;
+      }
+      const last = stroke.points[stroke.points.length - 1];
+      const penultimate = stroke.points[stroke.points.length - 2];
+      ctx.quadraticCurveTo(penultimate.x, penultimate.y, last.x, last.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    sampleEvent(evt) {
+      const x = (evt.clientX - this.rect.left);
+      const y = (evt.clientY - this.rect.top);
+      let filteredX = x;
+      let filteredY = y;
+      if (this.activeStroke && this.activeStroke.filters) {
+        filteredX = this.activeStroke.filters.x.filter(x, evt.timeStamp);
+        filteredY = this.activeStroke.filters.y.filter(y, evt.timeStamp);
+      }
+      return { x: filteredX, y: filteredY, time: evt.timeStamp };
+    }
+
+    startStroke(evt) {
+      const tool = this.callbacks.getTool();
+      const mode = tool === 'eraser' ? 'destination-out' : 'source-over';
+      const width = tool === 'eraser' ? this.callbacks.getEraserSize() : this.callbacks.getPenSize();
+      const color = mode === 'destination-out' ? 'rgba(0,0,0,1)' : '#111827';
+      this.activeStroke = {
+        pointerId: evt.pointerId,
+        mode,
+        width,
+        color,
+        filters: this.callbacks.useSmoothing() ? createFilterSet() : null,
+        points: [],
+        lastMid: null
+      };
+      this.currentStrokeData = {
+        mode,
+        size: width,
+        points: []
+      };
+      this.callbacks.onStrokeStart(this.side);
+      this.callbacks.onActivate(this.side);
+    }
+
+    processSamples(events) {
+      for (const evt of events) {
+        const sample = this.sampleEvent(evt);
+        const points = this.activeStroke.points;
+        if (points.length) {
+          const prev = points[points.length - 1];
+          const dist = Math.hypot(sample.x - prev.x, sample.y - prev.y);
+          if (dist < 0.35) {
+            continue;
+          }
+        }
+        points.push(sample);
+        this.currentStrokeData.points.push({ x: sample.x, y: sample.y });
+        this.drawSegment();
+      }
+    }
+
+    drawSegment() {
+      const stroke = this.activeStroke;
+      const points = stroke.points;
+      const ctx = this.inkCtx;
+      ctx.save();
+      ctx.globalCompositeOperation = stroke.mode;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.width;
+      ctx.fillStyle = stroke.color;
+      if (points.length === 1) {
+        const p = points[0];
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, stroke.width / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        return;
+      }
+      const last = points[points.length - 1];
+      const prev = points[points.length - 2];
+      const mid = midpoint(prev, last);
+      ctx.beginPath();
+      if (!stroke.lastMid) {
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(mid.x, mid.y);
+      } else {
+        ctx.moveTo(stroke.lastMid.x, stroke.lastMid.y);
+        ctx.quadraticCurveTo(prev.x, prev.y, mid.x, mid.y);
+      }
+      ctx.stroke();
+      stroke.lastMid = mid;
+      ctx.restore();
+    }
+
+    finishStroke(evt) {
+      if (!this.activeStroke) return;
+      const stroke = this.activeStroke;
+      if (stroke.points.length >= 2) {
+        const last = stroke.points[stroke.points.length - 1];
+        const prev = stroke.points[stroke.points.length - 2];
+        const ctx = this.inkCtx;
+        ctx.save();
+        ctx.globalCompositeOperation = stroke.mode;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.width;
+        ctx.beginPath();
+        if (stroke.lastMid) {
+          ctx.moveTo(stroke.lastMid.x, stroke.lastMid.y);
+        } else {
+          ctx.moveTo(prev.x, prev.y);
+        }
+        ctx.quadraticCurveTo(prev.x, prev.y, last.x, last.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (evt) {
+        this.container.releasePointerCapture?.(evt.pointerId);
+      }
+      if (this.currentStrokeData && this.currentStrokeData.points.length) {
+        this.callbacks.onStrokeComplete(this.side, this.currentStrokeData);
+      }
+      this.activeStroke = null;
+      this.currentStrokeData = null;
+    }
+
+    onPointerDown(evt) {
+      if (evt.pointerType === 'mouse' && evt.button !== 0) return;
+      if (evt.pointerType !== 'mouse' && evt.pointerType !== 'pen' && evt.pointerType !== 'touch') return;
+      evt.preventDefault();
+      this.rect = this.container.getBoundingClientRect();
+      this.container.setPointerCapture?.(evt.pointerId);
+      this.startStroke(evt);
+      const coalesced = (evt.getCoalescedEvents && evt.getCoalescedEvents().length) ? evt.getCoalescedEvents() : [evt];
+      this.processSamples(coalesced);
+    }
+
+    onPointerMove(evt) {
+      if (!this.activeStroke || evt.pointerId !== this.activeStroke.pointerId) return;
+      evt.preventDefault();
+      const events = (evt.getCoalescedEvents && evt.getCoalescedEvents().length) ? evt.getCoalescedEvents() : [evt];
+      this.processSamples(events);
+    }
+
+    onPointerUp(evt) {
+      if (!this.activeStroke || (evt && evt.pointerId !== this.activeStroke.pointerId)) return;
+      evt && evt.preventDefault();
+      this.finishStroke(evt);
+    }
+
+    onBlur() {
+      if (this.activeStroke) {
+        this.finishStroke();
+      }
+    }
+  }
+
+  const gridStroke = resolveGridStroke();
+
+  const pads = {
+    front: new CanvasPad('front', {
+      container: document.getElementById('pad-front'),
+      grid: document.getElementById('grid-front'),
+      ink: document.getElementById('ink-front'),
+      gridStroke,
+      callbacks: {
+        getTool: () => state.tool,
+        getPenSize: () => 2.6,
+        getEraserSize: () => 18,
+        useSmoothing: () => true,
+        onStrokeStart: () => pushUndoSnapshot(),
+        onStrokeComplete: (side, stroke) => {
+          const card = state.deck[state.index];
+          card[side].strokes.push(stroke);
+          saveDeck();
+          refresh();
+        },
+        onActivate: (side) => setActiveSide(side)
+      }
+    }),
+    back: new CanvasPad('back', {
+      container: document.getElementById('pad-back'),
+      grid: document.getElementById('grid-back'),
+      ink: document.getElementById('ink-back'),
+      gridStroke,
+      callbacks: {
+        getTool: () => state.tool,
+        getPenSize: () => 2.6,
+        getEraserSize: () => 18,
+        useSmoothing: () => true,
+        onStrokeStart: () => pushUndoSnapshot(),
+        onStrokeComplete: (side, stroke) => {
+          const card = state.deck[state.index];
+          card[side].strokes.push(stroke);
+          saveDeck();
+          refresh();
+        },
+        onActivate: (side) => setActiveSide(side)
+      }
+    })
+  };
+
+  function refresh() {
+    clampIndex();
+    updateCardIndex();
+    const card = state.deck[state.index];
+    setActiveSide(state.activeSide);
+    pads.front.setContent(card.front);
+    pads.back.setContent(card.back);
+  }
+
+  function setTool(tool) {
+    state.tool = tool;
+    if (penBtn) {
+      penBtn.classList.toggle('active', tool === 'pen');
+      penBtn.setAttribute('aria-pressed', tool === 'pen' ? 'true' : 'false');
+    }
+    if (eraserBtn) {
+      eraserBtn.classList.toggle('active', tool === 'eraser');
+      eraserBtn.setAttribute('aria-pressed', tool === 'eraser' ? 'true' : 'false');
+    }
+  }
+
+  if (penBtn) penBtn.addEventListener('click', () => setTool('pen'));
+  if (eraserBtn) eraserBtn.addEventListener('click', () => setTool('eraser'));
+  if (undoBtn) undoBtn.addEventListener('click', () => undo());
+  if (redoBtn) redoBtn.addEventListener('click', () => redo());
+  if (newBtn) newBtn.addEventListener('click', () => newCard());
+  if (duplicateBtn) duplicateBtn.addEventListener('click', () => duplicateCard());
+  if (deleteBtn) deleteBtn.addEventListener('click', () => deleteCard());
+  if (prevBtn) prevBtn.addEventListener('click', () => prevCard());
+  if (nextBtn) nextBtn.addEventListener('click', () => nextCard());
+
+  document.querySelectorAll('.card-cell').forEach((cell) => {
+    cell.addEventListener('click', () => {
+      const side = cell.dataset.side;
+      if (side) setActiveSide(side);
+    });
   });
-  btnRedo.addEventListener('click', () => {
-    if (!state.redoStack.length) return;
-    const snap = state.redoStack.pop();
-    state.undoStack.push(JSON.stringify(state.deck[state.index]));
-    applySnapshot(snap);
-  });
-  btnClear.addEventListener('click', clearSide);
-  btnSavePNG.addEventListener('click', savePNG);
-  btnExportDeck.addEventListener('click', exportDeck);
-  btnImportDeck.addEventListener('click', () => deckFile.click());
-  deckFile.addEventListener('change', e => importDeckFile(e.target.files[0]));
 
-  btnPrev.addEventListener('click', () => {
-    if (state.index > 0) setIndex(state.index-1);
-  });
-  btnNext.addEventListener('click', () => {
-    if (state.index < state.deck.length-1) setIndex(state.index+1);
+  window.addEventListener('keydown', (evt) => {
+    if ((evt.ctrlKey || evt.metaKey) && evt.key.toLowerCase() === 'z') {
+      evt.preventDefault();
+      if (evt.shiftKey) redo(); else undo();
+    }
+    if ((evt.ctrlKey || evt.metaKey) && evt.key.toLowerCase() === 'y') {
+      evt.preventDefault();
+      redo();
+    }
+    if (evt.key === 'p' || evt.key === 'P') setTool('pen');
+    if (evt.key === 'e' || evt.key === 'E') setTool('eraser');
+    if (evt.key === 'ArrowLeft') { evt.preventDefault(); prevCard(); }
+    if (evt.key === 'ArrowRight') { evt.preventDefault(); nextCard(); }
   });
 
-  btnFront.addEventListener('click', () => setSide('front'));
-  btnBack.addEventListener('click', () => setSide('back'));
+  await loadDeck();
+  attachImages(state.deck);
+  setActiveSide('front');
+  refresh();
 
-  btnNewCard.addEventListener('click', newCard);
-  btnDuplicateCard.addEventListener('click', duplicateCard);
-  btnDeleteCard.addEventListener('click', deleteCard);
-
-  draw.addEventListener('mousedown', onPointerDown);
-  window.addEventListener('mousemove', onPointerMove);
-  window.addEventListener('mouseup', onPointerUp);
-  window.addEventListener('keydown', handleKey);
-
-  // Initialize
-  ensureDeckInit();
-  attachImageBitmaps();
-  drawGrid();
-  updateDeckInfo();
-  render();
-
-  // Redraw grid on resize to keep pixel crispness
-  let resizeTimer;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-  const params = new URLSearchParams(location.search);
-  const setId = params.get('set') || (function(){
-    const sets = window.SetsAPI ? SetsAPI.loadSets() : [{id:'default',name:'Default'}];
-    return sets[0].id;
-  })();
-  const STORAGE_KEY = 'study_deck_v2__' + setId;
-  const setNameEl = document.getElementById('set-name');
-  if (setNameEl && window.SetsAPI) setNameEl.textContent = SetsAPI.getSetName(setId);
-
-      // keep canvas internal size; only CSS scales. Grid is fine.
-      drawGrid();
-      render();
-    }, 120);
+  window.addEventListener('beforeunload', () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    const snap = pendingSnapshot || snapshotDeck();
+    pendingSnapshot = null;
+    flushSave(snap);
   });
 })();
