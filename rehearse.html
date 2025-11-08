@@ -257,6 +257,8 @@
             viewCtx.drawImage(im.__image, -drawW / 2, -drawH / 2, drawW, drawH);
             viewCtx.restore();
           }
+          v.stroke();
+          v.restore();
         }
 
         if (Array.isArray(content.strokes)) {
@@ -304,8 +306,6 @@
             viewCtx.stroke();
             viewCtx.restore();
           }
-          v.stroke();
-          v.restore();
         }
 
         viewCtx.restore();
@@ -477,7 +477,14 @@
         if (!deck.length) return;
         if (event.defaultPrevented) return;
         if (event.target.closest('.card-cell')) return;
-        goNextCard();
+        const rect = gridContainer.getBoundingClientRect();
+        if (!rect.width) return;
+        const midpoint = rect.left + rect.width / 2;
+        if (event.clientX < midpoint) {
+          goPrevCard();
+        } else {
+          goNextCard();
+        }
       });
 
       btnPick?.addEventListener('click', async () => {
