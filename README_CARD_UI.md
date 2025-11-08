@@ -7,7 +7,6 @@ This is a **drop-in replacement** for the web front-end with a real flashcard lo
 - **Ratings:** 1=Again, 2=Hard, 3=Good, 4=Easy (buttons + keyboard).
 - **Confidence:** press **C** then type 1–5 (optional).
 - **Filters:** deck + tag filter remain at the top.
-- **MathJax:** LaTeX renders correctly.
 
 ## How to install
 1. Copy these files into your existing project folder (same folder as `study.py`), **overwriting the old `/templates` and `/static` and `webapp.py`**.
