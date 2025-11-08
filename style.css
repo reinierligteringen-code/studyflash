@@ -11,6 +11,8 @@
   --accent: #2f6bff;
   --accent-alt: #28a470;
   --warn: #d9822b;
+  --line: rgba(31, 42, 55, 0.22);
+  --focus: rgba(47, 107, 255, 0.5);
   --border: rgba(31, 42, 55, 0.14);
   --border-strong: rgba(31, 42, 55, 0.28);
   --shadow-lg: 0 20px 60px rgba(30, 41, 59, 0.18);
@@ -41,7 +43,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--accent-alt);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   box-shadow: none;
 }
