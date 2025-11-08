@@ -6,15 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <link rel="stylesheet" href="style.css" />
   <script src="sets.js"></script>
-  <script>
-    window.MathJax = {
-      tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']]},
-      svg:{fontCache:'global'}
-    };
-  </script>
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
   <style>
-
     body {
       color: var(--text);
       font: 14px/1.5 "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
@@ -51,10 +43,6 @@
     .title-block .muted {
       font-size: 13px;
       color: var(--muted);
-    }
-    .note {
-      color: var(--muted);
-      font-size: 13px;
     }
     .layout {
       display: grid;
@@ -251,7 +239,6 @@
         <h1>Edit Flashcards</h1>
         <div class="muted">Current set: <span id="set-name">Default</span></div>
       </div>
-      <div class="note">LaTeX supported: <code>$...$</code> or <code>$$...$$</code></div>
     </div>
 
     <div class="layout">
@@ -263,16 +250,16 @@
 
         <div class="section">
           <h3>Front (Question)</h3>
-          <label for="frontInput">Text (LaTeX allowed)</label>
-          <textarea id="frontInput" placeholder="Type the question… e.g. Show that $MRS=\\frac{p_x}{p_y}$ at an interior optimum."></textarea>
+          <label for="frontInput">Text</label>
+          <textarea id="frontInput" placeholder="Type the question… e.g. Explain why the marginal rate of substitution equals the price ratio at an interior optimum."></textarea>
           <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
           <div id="frontPreview" class="preview"></div>
         </div>
 
         <div class="section">
           <h3>Back (Answer)</h3>
-          <label for="backInput">Text (LaTeX allowed)</label>
-          <textarea id="backInput" placeholder="Sketch the steps and result… e.g. $$MRS=\\frac{MU_x}{MU_y}=\\frac{p_x}{p_y}$$"></textarea>
+          <label for="backInput">Text</label>
+          <textarea id="backInput" placeholder="Sketch the steps and result… e.g. Compare marginal utilities and prices to show the trade-off."></textarea>
           <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
           <div id="backPreview" class="preview"></div>
         </div>
@@ -356,7 +343,7 @@
       setNameLabel.textContent = activeSetId;
     }
 
-    // ===== Left: LaTeX previews =====
+    // ===== Left: Text previews =====
     const frontInput = document.getElementById('frontInput');
     const backInput  = document.getElementById('backInput');
     const frontPreview = document.getElementById('frontPreview');
@@ -366,7 +353,6 @@
     function renderPreview(el, text){
       const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       el.innerHTML = safe.replace(/\n/g,'<br/>');
-      if (window.MathJax?.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{});
     }
     function refresh(){ renderPreview(frontPreview, frontInput.value); renderPreview(backPreview, backInput.value); }
     frontInput.addEventListener('input', refresh);
