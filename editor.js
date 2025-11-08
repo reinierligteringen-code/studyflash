@@ -506,6 +506,14 @@
 
     setContent(content) {
       this.content = content || createEmptySide();
+      if (this.content && (!this.content.dimensions || !Number.isFinite(this.content.dimensions.width) || !Number.isFinite(this.content.dimensions.height))) {
+        const size = {
+          width: this.rect?.width || this.gridCanvas.width / Math.max(1, this.dpr),
+          height: this.rect?.height || this.gridCanvas.height / Math.max(1, this.dpr)
+        };
+        this.content.dimensions = size;
+        this.callbacks.onDimensions?.(this.side, size);
+      }
       this.renderFromContent();
     }
 
@@ -517,6 +525,15 @@
       ctx.restore();
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       if (!this.content) return;
+
+      const dims = this.content.dimensions || {};
+      const baseWidth = Number.isFinite(dims.width) && dims.width > 0 ? dims.width : this.rect.width || 1;
+      const baseHeight = Number.isFinite(dims.height) && dims.height > 0 ? dims.height : this.rect.height || 1;
+      const scaleX = baseWidth ? (this.rect.width || baseWidth) / baseWidth : 1;
+      const scaleY = baseHeight ? (this.rect.height || baseHeight) / baseHeight : 1;
+
+      ctx.save();
+      ctx.scale(scaleX, scaleY);
 
       if (Array.isArray(this.content.images)) {
         for (const img of this.content.images) {
@@ -540,6 +557,8 @@
           this.drawStoredStroke(stroke);
         }
       }
+
+      ctx.restore();
     }
 
     drawStoredStroke(stroke) {
@@ -551,9 +570,14 @@
       ctx.lineJoin = 'round';
       const strokeColor = stroke.color || (stroke.mode === 'destination-out' ? 'rgba(0,0,0,1)' : '#111827');
       ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = stroke.size || 2.4;
+      const widthValue = typeof stroke.size === 'number' ? stroke.size : Number(stroke.size);
+      ctx.lineWidth = Number.isFinite(widthValue) && widthValue > 0 ? widthValue : 2.4;
       if (stroke.points.length === 1) {
-        const p = stroke.points[0];
+        const rawPoint = stroke.points[0];
+        const p = {
+          x: typeof rawPoint.x === 'number' ? rawPoint.x : Number(rawPoint.x) || 0,
+          y: typeof rawPoint.y === 'number' ? rawPoint.y : Number(rawPoint.y) || 0
+        };
         ctx.beginPath();
         ctx.arc(p.x, p.y, ctx.lineWidth / 2, 0, Math.PI * 2);
         ctx.fillStyle = ctx.strokeStyle;
@@ -561,17 +585,21 @@
         ctx.restore();
         return;
       }
-      let prev = stroke.points[0];
+      const pts = stroke.points.map((pt) => ({
+        x: typeof pt.x === 'number' ? pt.x : Number(pt.x) || 0,
+        y: typeof pt.y === 'number' ? pt.y : Number(pt.y) || 0
+      }));
+      let prev = pts[0];
       ctx.beginPath();
       ctx.moveTo(prev.x, prev.y);
-      for (let i = 1; i < stroke.points.length; i++) {
-        const current = stroke.points[i];
+      for (let i = 1; i < pts.length; i++) {
+        const current = pts[i];
         const mid = midpoint(prev, current);
         ctx.quadraticCurveTo(prev.x, prev.y, mid.x, mid.y);
         prev = current;
       }
-      const last = stroke.points[stroke.points.length - 1];
-      const penultimate = stroke.points[stroke.points.length - 2];
+      const last = pts[pts.length - 1];
+      const penultimate = pts[pts.length - 2];
       ctx.quadraticCurveTo(penultimate.x, penultimate.y, last.x, last.y);
       ctx.stroke();
       ctx.restore();
@@ -691,8 +719,18 @@
       if (evt) {
         this.container.releasePointerCapture?.(evt.pointerId);
       }
+      if (this.content) {
+        this.content.dimensions = {
+          width: this.rect?.width || this.gridCanvas.width / Math.max(1, this.dpr),
+          height: this.rect?.height || this.gridCanvas.height / Math.max(1, this.dpr)
+        };
+      }
       if (this.currentStrokeData && this.currentStrokeData.points.length) {
-        this.callbacks.onStrokeComplete(this.side, this.currentStrokeData);
+        const size = this.content?.dimensions || {
+          width: this.rect?.width || this.gridCanvas.width / Math.max(1, this.dpr),
+          height: this.rect?.height || this.gridCanvas.height / Math.max(1, this.dpr)
+        };
+        this.callbacks.onStrokeComplete(this.side, this.currentStrokeData, size);
       }
       this.activeStroke = null;
       this.currentStrokeData = null;
@@ -743,11 +781,23 @@
         getEraserSize: () => 18,
         useSmoothing: () => true,
         onStrokeStart: () => pushUndoSnapshot(),
-        onStrokeComplete: (side, stroke) => {
+        onStrokeComplete: (side, stroke, size) => {
           const card = state.deck[state.index];
           card[side].strokes.push(stroke);
+          if (size && Number.isFinite(size.width) && Number.isFinite(size.height)) {
+            card[side].dimensions = { width: size.width, height: size.height };
+          }
           saveDeck();
           refresh();
+        },
+        onDimensions: (side, size) => {
+          if (!size || !Number.isFinite(size.width) || !Number.isFinite(size.height)) return;
+          const card = state.deck[state.index];
+          if (!card || !card[side]) return;
+          const dims = card[side].dimensions || {};
+          if (dims.width === size.width && dims.height === size.height) return;
+          card[side].dimensions = { width: size.width, height: size.height };
+          saveDeck();
         },
         onActivate: (side) => setActiveSide(side)
       }
@@ -763,11 +813,23 @@
         getEraserSize: () => 18,
         useSmoothing: () => true,
         onStrokeStart: () => pushUndoSnapshot(),
-        onStrokeComplete: (side, stroke) => {
+        onStrokeComplete: (side, stroke, size) => {
           const card = state.deck[state.index];
           card[side].strokes.push(stroke);
+          if (size && Number.isFinite(size.width) && Number.isFinite(size.height)) {
+            card[side].dimensions = { width: size.width, height: size.height };
+          }
           saveDeck();
           refresh();
+        },
+        onDimensions: (side, size) => {
+          if (!size || !Number.isFinite(size.width) || !Number.isFinite(size.height)) return;
+          const card = state.deck[state.index];
+          if (!card || !card[side]) return;
+          const dims = card[side].dimensions || {};
+          if (dims.width === size.width && dims.height === size.height) return;
+          card[side].dimensions = { width: size.width, height: size.height };
+          saveDeck();
         },
         onActivate: (side) => setActiveSide(side)
       }
