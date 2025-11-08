@@ -63,7 +63,7 @@
         <div class="card-progress">Card <span id="progress">1 / 1</span></div>
       </header>
 
-      <div class="cards-grid single">
+      <div class="cards-grid single" id="rehearseGrid">
         <article class="card-cell front" id="cardCell">
           <div class="card-cell-header">
             <span class="card-side-tag" id="cardSideTag">Front</span>
@@ -91,6 +91,7 @@
       const cardSideTag = document.getElementById('cardSideTag');
       const progressEl = document.getElementById('progress');
       const setNameEl = document.getElementById('set-name');
+      const gridContainer = document.getElementById('rehearseGrid');
 
       const btnPrev = document.getElementById('btn-prev');
       const btnNext = document.getElementById('btn-next');
@@ -137,11 +138,28 @@
         }
         if (cardSideTag) {
           cardSideTag.textContent = side === 'back' ? 'Back' : 'Front';
+          cardSideTag.classList.toggle('is-back', side === 'back');
         }
         if (cardCell) {
           cardCell.classList.toggle('back', side === 'back');
           cardCell.classList.toggle('front', side !== 'back');
           cardCell.setAttribute('aria-pressed', side === 'back' ? 'true' : 'false');
+        }
+      }
+
+      function goPrevCard() {
+        if (index > 0) {
+          index -= 1;
+          side = 'front';
+          render();
+        }
+      }
+
+      function goNextCard() {
+        if (index < deck.length - 1) {
+          index += 1;
+          side = 'front';
+          render();
         }
       }
 
@@ -414,26 +432,19 @@
       }
 
       btnPrev?.addEventListener('click', () => {
-        if (index > 0) {
-          index -= 1;
-          side = 'front';
-          render();
-        }
+        goPrevCard();
       });
 
       btnNext?.addEventListener('click', () => {
-        if (index < deck.length - 1) {
-          index += 1;
-          side = 'front';
-          render();
-        }
+        goNextCard();
       });
 
       btnFlip?.addEventListener('click', () => {
         toggleSide();
       });
 
-      cardCell?.addEventListener('click', () => {
+      cardCell?.addEventListener('click', (event) => {
+        event.stopPropagation();
         toggleSide();
       });
 
@@ -455,6 +466,13 @@
         index = 0;
         side = 'front';
         render();
+      });
+
+      gridContainer?.addEventListener('click', (event) => {
+        if (!deck.length) return;
+        if (event.defaultPrevented) return;
+        if (event.target.closest('.card-cell')) return;
+        goNextCard();
       });
 
       btnPick?.addEventListener('click', async () => {
