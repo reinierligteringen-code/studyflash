@@ -4,138 +4,346 @@
   <meta charset="utf-8" />
   <title>Study Cards — Editor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <script>
-    window.MathJax = {
-      tex:{inlineMath:[['$','$'],['\\(','\\)']],displayMath:[['$$','$$'],['\\[','\\]']]},
-      svg:{fontCache:'global'}
-    };
-  </script>
-  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <script src="sets.js"></script>
   <style>
-    :root{
-      --brand:#0a84ff; --ink:#111; --ink-2:#555;
-      --bg:#f6f7fb; --panel:#ffffff; --line:#e7e7ee;
-      --accent:#0a84ff; --warn:#ef4444;
-      --toolbar-h:56px; --sidebar-w:420px;
-      --grid-bg:#e9f1ff;
+    body {
+      color: var(--text);
+      font: 14px/1.5 "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    .header{position:sticky;top:0;z-index:100;height:56px;display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
-    .header a.back{text-decoration:none;color:var(--ink-2);padding:6px 10px;border:1px solid var(--line);border-radius:10px}
-    .header .title{font-weight:600}
-    .wrap{height:calc(100vh - 56px);display:grid;grid-template-columns:var(--sidebar-w) 1fr}
-    @media (max-width:980px){.wrap{grid-template-columns:1fr;height:auto}.canvasPane{height:70vh}}
-    .sidebar{overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:16px 16px 100px}
-    .section{margin-bottom:18px}
-    .section h3{margin:0 0 10px;font-size:15px}
-    label{display:block;font-size:12px;color:var(--ink-2);margin:10px 0 6px}
-    input[type=text],textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;color:var(--ink);resize:vertical}
-    textarea{min-height:84px}
-    .preview{border:1px dashed var(--line);background:#fff;border-radius:12px;padding:12px;min-height:72px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .muted{color:var(--ink-2);font-size:12px}
-    button{border:1px solid var(--line);background:#fff;padding:9px 12px;border-radius:12px;cursor:pointer;user-select:none}
-    button.primary{border-color:var(--accent);background:var(--accent);color:#fff}
-    button.active{border-color:var(--accent);box-shadow:0 0 0 2px rgba(10,132,255,.15)}
-    button:disabled{opacity:.6;cursor:not-allowed}
-    .tag{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12px;margin-right:6px;margin-top:6px}
-    .canvasPane{position:relative;background:#fff;height:100%}
-    .toolbar{height:var(--toolbar-h);display:flex;gap:10px;align-items:center;padding:10px 12px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
-    .toolbar .group{display:flex;gap:6px;align-items:center}
-    input[type=range]{width:140px}
-    .spacer{flex:1}
-    .pad{position:relative;width:100%;height:calc(100% - var(--toolbar-h));touch-action:none;overscroll-behavior:contain;background:var(--grid-bg)}
-    canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-    /* Disable selection/highlight only while drawing */
-    body.drawing, body.drawing *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-    /* Nicer grid contrast on blue bg */
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 18px;
+      margin-bottom: 26px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    .title-block h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0.4px;
+    }
+    .title-block .muted {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .layout {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+      align-items: start;
+    }
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .panel,
+    .canvas-pane {
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 18px;
+      box-shadow: var(--shadow-lg);
+    }
+    .panel {
+      padding: 26px 24px 30px;
+    }
+    .section {
+      margin-bottom: 26px;
+    }
+    .section:last-child {
+      margin-bottom: 0;
+    }
+    .section h3 {
+      margin: 0 0 14px;
+      font-size: 15px;
+      letter-spacing: 0.3px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    input[type=text],
+    textarea {
+      background: var(--card);
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+    textarea {
+      min-height: 108px;
+    }
+    .preview {
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      min-height: 88px;
+      background: rgba(236, 241, 252, 0.9);
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.85);
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.03em;
+    }
+    .tag input {
+      accent-color: var(--accent);
+    }
+    .canvas-pane {
+      display: flex;
+      flex-direction: column;
+      min-height: 560px;
+      position: relative;
+      overflow: hidden;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: rgba(248, 250, 255, 0.95);
+      border-bottom: 1px solid var(--border-strong);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .toolbar::-webkit-scrollbar {
+      height: 6px;
+    }
+    .toolbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .toolbar::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+    }
+    .toolbar button,
+    .toolbar .control {
+      flex: 0 0 auto;
+    }
+    .toolbar button {
+      border-radius: 12px;
+    }
+    .toolbar .control {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(241, 245, 255, 0.95);
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .toolbar .control .control-label {
+      letter-spacing: 0.03em;
+    }
+    .toolbar .control output {
+      min-width: 60px;
+      text-align: left;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .toolbar .control input[type=range] {
+      width: 160px;
+      min-width: 160px;
+      background: transparent;
+    }
+    .toolbar .control select {
+      width: auto;
+      min-width: 92px;
+      padding: 0.35rem 2.2rem 0.35rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.95);
+    }
+    .pad {
+      position: relative;
+      width: 100%;
+      flex: 1;
+      touch-action: none;
+      overscroll-behavior: contain;
+      background: radial-gradient(circle at 40% 30%, rgba(47, 107, 255, 0.12), transparent 55%), var(--card);
+    }
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #gridCanvas {
+      pointer-events: none;
+    }
+    body.drawing,
+    body.drawing * {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .actions-row {
+      gap: 12px;
+    }
+    .actions-row button {
+      border-radius: 12px;
+    }
   </style>
 </head>
 <body>
-  <div class="header">
-    <a class="back" href="./index.html">← Home</a>
-    <div class="title">Edit Flashcard</div>
-    <div class="spacer"></div>
-    <div class="muted">LaTeX supported: <code>$...$</code> or <code>$$...$$</code></div>
-  </div>
-
   <div class="wrap">
-    <aside class="sidebar">
-      <div class="section">
-        <label for="title">Title</label>
-        <input id="title" type="text" placeholder="e.g. Week 2 — MRS and Budget Line">
+    <div class="topbar">
+      <div class="nav-links">
+        <a class="btn" href="index.html">← Home</a>
+        <a class="btn" href="manage.html">Sets</a>
+        <a class="btn" id="link-rehearse" href="rehearse.html">Rehearse</a>
       </div>
-
-      <div class="section">
-        <h3>Front (Question)</h3>
-        <label for="frontInput">Text (LaTeX allowed)</label>
-        <textarea id="frontInput" placeholder="Type the question… e.g. Show that $MRS=\\frac{p_x}{p_y}$ at an interior optimum."></textarea>
-        <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
-        <div id="frontPreview" class="preview"></div>
+      <div class="title-block">
+        <h1>Edit Flashcards</h1>
+        <div class="muted">Current set: <span id="set-name">Default</span></div>
       </div>
+    </div>
 
-      <div class="section">
-        <h3>Back (Answer)</h3>
-        <label for="backInput">Text (LaTeX allowed)</label>
-        <textarea id="backInput" placeholder="Sketch the steps and result… e.g. $$MRS=\\frac{MU_x}{MU_y}=\\frac{p_x}{p_y}$$"></textarea>
-        <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
-        <div id="backPreview" class="preview"></div>
-      </div>
-
-      <div class="section">
-        <h3>Attach drawing to…</h3>
-        <div class="row">
-          <label class="tag"><input type="radio" name="attachTo" value="front" checked> Front</label>
-          <label class="tag"><input type="radio" name="attachTo" value="back"> Back</label>
-          <button id="snapshotBtn">Insert canvas snapshot</button>
-          <button id="clearImgsBtn">Remove all images</button>
+    <div class="layout">
+      <aside class="panel">
+        <div class="section">
+          <label for="title">Title</label>
+          <input id="title" type="text" placeholder="e.g. Week 2 — MRS and Budget Line">
         </div>
-        <div class="muted" style="margin-top:6px">Use the canvas to the right; click “Insert canvas snapshot” to embed it.</div>
-      </div>
 
-      <div class="section row">
-        <button id="saveBtn" class="primary">Save card (JSON)</button>
-        <button id="downloadPNG">Download preview as PNG</button>
-        <button id="clearTextBtn" style="color:var(--warn);border-color:var(--warn)">Clear text</button>
-      </div>
-    </aside>
+        <div class="section">
+          <h3>Front (Question)</h3>
+          <label for="frontInput">Text</label>
+          <textarea id="frontInput" placeholder="Type the question… e.g. Explain why the marginal rate of substitution equals the price ratio at an interior optimum."></textarea>
+          <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
+          <div id="frontPreview" class="preview"></div>
+        </div>
 
-    <section class="canvasPane">
-      <div class="toolbar">
-        <div class="group">
-          <button id="penBtn" class="active" title="Pen (P)">Pen</button>
-          <button id="eraserBtn" title="Eraser (E)">Eraser</button>
+        <div class="section">
+          <h3>Back (Answer)</h3>
+          <label for="backInput">Text</label>
+          <textarea id="backInput" placeholder="Sketch the steps and result… e.g. Compare marginal utilities and prices to show the trade-off."></textarea>
+          <div class="row muted"><span>Preview</span><span class="tag">Rendered</span></div>
+          <div id="backPreview" class="preview"></div>
         </div>
-        <div class="group">
-          <label for="size">Size</label>
-          <input id="size" type="range" min="0.5" max="6" step="0.1" value="1.3">
-          <span id="sizeVal">1.3</span> px
+
+        <div class="section">
+          <h3>Attach drawing to…</h3>
+          <div class="row">
+            <label class="tag"><input type="radio" name="attachTo" value="front" checked> Front</label>
+            <label class="tag"><input type="radio" name="attachTo" value="back"> Back</label>
+            <button id="snapshotBtn">Insert canvas snapshot</button>
+            <button id="clearImgsBtn">Remove all images</button>
+          </div>
+          <div class="muted" style="margin-top:6px">Use the canvas to the right; click “Insert canvas snapshot” to embed it.</div>
         </div>
-        <div class="group">
-          <label for="grid">Grid</label>
-          <input id="grid" type="range" min="10" max="40" step="2" value="24">
-          <span id="gridVal">24</span> px
-          <button id="toggleGrid">Toggle grid</button>
+
+        <div class="section row actions-row">
+          <button id="saveBtn" class="primary">Save card (JSON)</button>
+          <button id="downloadPNG">Download preview as PNG</button>
+          <button id="clearTextBtn" class="warn">Clear text</button>
         </div>
-        <div class="group">
+      </aside>
+
+      <section class="canvas-pane">
+        <div class="toolbar" role="toolbar" aria-label="Drawing tools">
+          <button id="penBtn" class="active" title="Pen (P)" aria-pressed="true">Pen</button>
+          <button id="eraserBtn" title="Eraser (E)" aria-pressed="false">Eraser</button>
+          <div class="control" id="sizeControl">
+            <span class="control-label">Size</span>
+            <input id="size" type="range" min="0.5" max="4" step="0.1" value="1.3" aria-label="Pen size">
+            <output id="sizeVal" for="size">1.3 px</output>
+          </div>
           <button id="undoBtn" title="Undo (Ctrl/Cmd+Z)">Undo</button>
           <button id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
           <button id="clearBtn">Clear</button>
           <button id="exportCanvasBtn">Export PNG</button>
+          <button id="toggleGrid" aria-pressed="true">Grid On</button>
+          <div class="control">
+            <span class="control-label">Grid Size</span>
+            <select id="gridSize" aria-label="Grid size">
+              <option value="16">16 px</option>
+              <option value="20">20 px</option>
+              <option value="24" selected>24 px</option>
+              <option value="32">32 px</option>
+            </select>
+          </div>
         </div>
-        <div class="spacer"></div>
-      </div>
 
-      <div class="pad" id="pad">
-        <canvas id="gridCanvas"></canvas>
-        <canvas id="drawCanvas"></canvas>
-      </div>
-    </section>
+        <div class="pad" id="pad">
+          <canvas id="gridCanvas"></canvas>
+          <canvas id="drawCanvas"></canvas>
+        </div>
+      </section>
+    </div>
   </div>
 
   <script>
-    // ===== Left: LaTeX previews =====
+    const params = new URLSearchParams(location.search);
+    const requestedSet = params.get('set');
+    let activeSetId = requestedSet || 'default';
+    const setNameLabel = document.getElementById('set-name');
+    const rehearseLink = document.getElementById('link-rehearse');
+
+    if (window.SetsAPI) {
+      const sets = SetsAPI.loadSets();
+      if (!requestedSet) {
+        activeSetId = sets[sets.length - 1]?.id || 'default';
+      } else if (!SetsAPI.getSetById(requestedSet)) {
+        activeSetId = sets[sets.length - 1]?.id || 'default';
+      }
+      if (activeSetId !== requestedSet) {
+        params.set('set', activeSetId);
+        const url = new URL(location.href);
+        url.search = params.toString();
+        history.replaceState({}, '', url.toString());
+      }
+      setNameLabel.textContent = SetsAPI.getSetName(activeSetId);
+      if (rehearseLink) {
+        rehearseLink.href = `rehearse.html?set=${encodeURIComponent(activeSetId)}`;
+      }
+    } else {
+      setNameLabel.textContent = activeSetId;
+    }
+
+    // ===== Left: Text previews =====
     const frontInput = document.getElementById('frontInput');
     const backInput  = document.getElementById('backInput');
     const frontPreview = document.getElementById('frontPreview');
@@ -145,7 +353,6 @@
     function renderPreview(el, text){
       const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       el.innerHTML = safe.replace(/\n/g,'<br/>');
-      if (window.MathJax?.typesetPromise) MathJax.typesetPromise([el]).catch(()=>{});
     }
     function refresh(){ renderPreview(frontPreview, frontInput.value); renderPreview(backPreview, backInput.value); }
     frontInput.addEventListener('input', refresh);
@@ -189,11 +396,10 @@
 
     const penBtn=document.getElementById('penBtn');
     const eraserBtn=document.getElementById('eraserBtn');
-    const sizeInputR=document.getElementById('size');
+    const sizeInput=document.getElementById('size');
     const sizeVal=document.getElementById('sizeVal');
-    const gridInput=document.getElementById('grid');
-    const gridVal=document.getElementById('gridVal');
-    const toggleGridBtn=document.getElementById('toggleGrid');
+    const gridToggleBtn=document.getElementById('toggleGrid');
+    const gridSizeSelect=document.getElementById('gridSize');
     const undoBtn=document.getElementById('undoBtn');
     const redoBtn=document.getElementById('redoBtn');
     const clearBtn=document.getElementById('clearBtn');
@@ -201,6 +407,43 @@
 
     let dpr = Math.max(1, window.devicePixelRatio||1);
     let mode='pen', gridVisible=true;
+
+    const gridStroke = (()=>{
+      const rootStyle = getComputedStyle(document.documentElement);
+      const muted = (rootStyle.getPropertyValue('--muted') || '#9fa9c6').trim();
+      const hex = muted.replace('#','');
+      const parseHex = (h)=>{
+        if (h.length===3) {
+          return {
+            r: parseInt(h[0]+h[0],16),
+            g: parseInt(h[1]+h[1],16),
+            b: parseInt(h[2]+h[2],16)
+          };
+        }
+        if (h.length===6) {
+          return {
+            r: parseInt(h.slice(0,2),16),
+            g: parseInt(h.slice(2,4),16),
+            b: parseInt(h.slice(4,6),16)
+          };
+        }
+        return null;
+      };
+      const rgb = muted.startsWith('#') ? parseHex(hex) : null;
+      if (rgb) {
+        return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`;
+      }
+      const probe = document.createElement('span');
+      probe.style.color = muted;
+      document.body.appendChild(probe);
+      const computed = getComputedStyle(probe).color;
+      probe.remove();
+      const match = computed.match(/\d+/g);
+      if (match && match.length >= 3) {
+        return `rgba(${match[0]}, ${match[1]}, ${match[2]}, 0.2)`;
+      }
+      return 'rgba(159, 169, 198, 0.2)';
+    })();
 
     // Use canvas snapshots for history (fast)
     let undoStack=[], redoStack=[];
@@ -212,46 +455,50 @@
         c.style.width=r.width+'px'; c.style.height=r.height+'px';
         c.width=Math.round(r.width*dpr); c.height=Math.round(r.height*dpr);
       });
-      gtx.setTransform(dpr,0,0,dpr,0,0);
       ctx.setTransform(dpr,0,0,dpr,0,0);
       drawGrid();
       restoreLatest();
     }
 
     function drawGrid(){
+      gtx.setTransform(1,0,0,1,0,0);
       gtx.clearRect(0,0,gridCanvas.width,gridCanvas.height);
       if(!gridVisible) return;
-      const spacing=Number(gridInput.value);
-      const r=pad.getBoundingClientRect(), w=r.width, h=r.height;
-      // faint grid on colored background
-      gtx.save();
-      gtx.strokeStyle='rgba(0,0,0,.08)';
-      gtx.lineWidth=1;
+      const spacingCSS = Number(gridSizeSelect.value) || 24;
+      const spacing = spacingCSS * dpr;
+      gtx.lineWidth = 1;
+      gtx.strokeStyle = gridStroke;
       gtx.beginPath();
-      for(let x=0.5;x<=w;x+=spacing){gtx.moveTo(x,0);gtx.lineTo(x,h);}
-      for(let y=0.5;y<=h;y+=spacing){gtx.moveTo(0,y);gtx.lineTo(w,y);}
-      gtx.stroke(); gtx.restore();
+      for(let x=0.5; x<=gridCanvas.width; x+=spacing){
+        gtx.moveTo(x,0);
+        gtx.lineTo(x,gridCanvas.height);
+      }
+      for(let y=0.5; y<=gridCanvas.height; y+=spacing){
+        gtx.moveTo(0,y);
+        gtx.lineTo(gridCanvas.width,y);
+      }
+      gtx.stroke();
     }
 
     // --- Palm rejection / stylus-only drawing ---
     let isDrawing=false, activePointerId=null, last=null;
 
     function beginDraw(e){
-      // Only Apple Pencil or mouse (not finger)
       if (e.pointerType!=='pen' && !(e.pointerType==='mouse' && e.button===0)) return;
       e.preventDefault();
       drawCanvas.setPointerCapture?.(e.pointerId);
       activePointerId=e.pointerId; isDrawing=true; last=point(e);
       pushUndo();
-      document.body.classList.add('drawing'); // disable text selection while drawing
-      // draw a tiny seed to avoid missing first segment
-      ctx.save(); configureCtx(e); ctx.beginPath(); ctx.arc(last.x,last.y,ctx.lineWidth/2,0,Math.PI*2); ctx.fillStyle=(mode==='eraser')?'#000':'#111'; if(mode==='eraser') ctx.globalCompositeOperation='destination-out'; else ctx.globalCompositeOperation='source-over'; ctx.fill(); ctx.restore();
+      document.body.classList.add('drawing');
+      ctx.save(); configureCtx(e); ctx.beginPath(); ctx.arc(last.x,last.y,ctx.lineWidth/2,0,Math.PI*2);
+      if(mode==='eraser'){ ctx.globalCompositeOperation='destination-out'; ctx.fillStyle='rgba(0,0,0,1)'; }
+      else { ctx.globalCompositeOperation='source-over'; ctx.fillStyle='rgba(12,18,28,1)'; }
+      ctx.fill(); ctx.restore();
     }
 
     function moveDraw(e){
       if(!isDrawing || e.pointerId!==activePointerId) return;
       e.preventDefault();
-      // Use all coalesced points (smooth continuous line on iPad)
       const evts = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
       ctx.save(); configureCtx(e); ctx.beginPath(); ctx.moveTo(last.x,last.y);
       for(const ce of evts){
@@ -276,7 +523,7 @@
     }
 
     function sizeFor(e){
-      const base=Number(sizeInputR.value);
+      const base=Number(sizeInput.value);
       const pressure=(e.pressure && e.pressure>0)? e.pressure : 0.6;
       const scale=(mode==='eraser')?3.2:(0.9+pressure*1.1);
       return base*scale;
@@ -286,7 +533,7 @@
       ctx.lineCap='round'; ctx.lineJoin='round'; ctx.miterLimit=2;
       ctx.lineWidth = sizeFor(e);
       if(mode==='eraser'){ ctx.globalCompositeOperation='destination-out'; }
-      else { ctx.globalCompositeOperation='source-over'; ctx.strokeStyle='#111'; }
+      else { ctx.globalCompositeOperation='source-over'; ctx.strokeStyle='rgba(12,18,28,1)'; }
     }
 
     // History using snapshots (fast drawImage)
@@ -333,15 +580,29 @@
       return out.toDataURL('image/png');
     }
     window.exportMergedCanvas = exportMergedCanvas;
-    document.getElementById('exportCanvasBtn').addEventListener('click', ()=>{const a=document.createElement('a');a.download='canvas.png';a.href=exportMergedCanvas();a.click();});
+    exportCanvasBtn.addEventListener('click', ()=>{const a=document.createElement('a');a.download='canvas.png';a.href=exportMergedCanvas();a.click();});
 
-    // UI wiring
-    function setMode(m){mode=m;penBtn.classList.toggle('active',m==='pen');eraserBtn.classList.toggle('active',m==='eraser');}
+    function setMode(m){
+      mode=m;
+      penBtn.classList.toggle('active',m==='pen');
+      eraserBtn.classList.toggle('active',m==='eraser');
+      penBtn.setAttribute('aria-pressed', m==='pen');
+      eraserBtn.setAttribute('aria-pressed', m==='eraser');
+    }
+    function updateSizeLabel(){
+      sizeVal.textContent = `${Number(sizeInput.value).toFixed(1)} px`;
+    }
+    function updateGridToggle(){
+      gridToggleBtn.textContent = gridVisible ? 'Grid On' : 'Grid Off';
+      gridToggleBtn.classList.toggle('active', gridVisible);
+      gridToggleBtn.setAttribute('aria-pressed', gridVisible);
+    }
+
     penBtn.addEventListener('click',()=>setMode('pen'));
     eraserBtn.addEventListener('click',()=>setMode('eraser'));
-    sizeInputR.addEventListener('input',()=>sizeVal.textContent=sizeInputR.value);
-    gridInput.addEventListener('input',()=>{gridVal.textContent=gridInput.value;drawGrid();});
-    toggleGridBtn.addEventListener('click',()=>{gridVisible=!gridVisible;drawGrid();});
+    sizeInput.addEventListener('input',()=>{updateSizeLabel();});
+    gridSizeSelect.addEventListener('change',()=>{drawGrid();});
+    gridToggleBtn.addEventListener('click',()=>{gridVisible=!gridVisible; updateGridToggle(); drawGrid();});
     undoBtn.addEventListener('click',doUndo);
     redoBtn.addEventListener('click',doRedo);
     clearBtn.addEventListener('click',()=>{pushUndo();ctx.clearRect(0,0,drawCanvas.width,drawCanvas.height);redoStack.length=0;});
@@ -353,14 +614,12 @@
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&e.shiftKey){e.preventDefault();doRedo();}
     });
 
-    // Pointer events (stylus-only)
     drawCanvas.addEventListener('pointerdown', beginDraw, {passive:false});
     drawCanvas.addEventListener('pointermove',  moveDraw,  {passive:false});
     window.addEventListener('pointerup',   endDraw, {passive:false});
     window.addEventListener('pointercancel',endDraw,{passive:false});
     window.addEventListener('blur', endDraw);
 
-    // Prevent stray touch events on the pad from doing anything
     pad.addEventListener('touchstart', e=>e.preventDefault(), {passive:false});
     pad.addEventListener('touchmove',  e=>e.preventDefault(), {passive:false});
 
@@ -368,8 +627,10 @@
     window.addEventListener('orientationchange', setCanvasSize);
     window.addEventListener('load', setCanvasSize);
 
-    sizeVal.textContent=sizeInputR.value; gridVal.textContent=gridInput.value;
-    setCanvasSize(); pushUndo();
+    updateSizeLabel();
+    updateGridToggle();
+    setCanvasSize();
+    pushUndo();
   </script>
 </body>
 </html>
